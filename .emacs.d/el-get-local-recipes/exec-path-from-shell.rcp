@@ -1,0 +1,4 @@
+(:name exec-path-from-shell
+       :description "Make Emacs use the $PATH set up by the user's shell [local]"
+       :type github
+       :pkgname "purcell/exec-path-from-shell")

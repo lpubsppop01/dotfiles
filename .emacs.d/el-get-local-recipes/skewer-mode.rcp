@@ -1,0 +1,5 @@
+(:name skewer-mode
+       :description "live browser JavaScript and CSS interaction [local]"
+       :type github
+       :pkgname "skeeto/skewer-mode"
+       :depends (js2-mode simple-httpd))

@@ -1,0 +1,10 @@
+Metadata-Version: 1.0
+Name: Pymacs
+Version: 0.25
+Summary: Interface between Emacs Lisp and Python
+Home-page: UNKNOWN
+Author: François Pinard
+Author-email: pinard@iro.umontreal.ca
+License: GPLv2
+Description: False
+Platform: UNKNOWN

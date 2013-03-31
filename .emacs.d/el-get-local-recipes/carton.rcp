@@ -1,0 +1,4 @@
+(:name carton
+       :description "Emacs dependency management made easy [local]"
+       :type github
+       :pkgname "rejeep/carton")

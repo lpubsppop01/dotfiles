@@ -1,0 +1,4 @@
+(:name scala-mode2
+       :description "Major mode for editing Scala >= 2.9 [local]"
+       :type github
+       :pkgname "hvesalai/scala-mode2")

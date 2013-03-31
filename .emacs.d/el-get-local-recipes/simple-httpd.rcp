@@ -1,0 +1,4 @@
+(:name simple-httpd
+       :description "pure elisp HTTP server [local]"
+       :type github
+       :pkgname "skeeto/emacs-http-server")

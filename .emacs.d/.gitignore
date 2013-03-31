@@ -1,0 +1,11 @@
+/ac-comphist.dat
+/auto-save-list
+/backups
+/el-get
+/el-get-init-files/*.elc
+/elpa
+/emacs.desktop
+/emacs.desktop.lock
+/eshell
+/server
+/url
