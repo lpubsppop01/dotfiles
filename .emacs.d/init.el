@@ -1,6 +1,6 @@
 ;; -*- mode: emacs-lisp ; coding: utf-8-unix -*-
 ;; ~/.emacs.d/init.el
-;; Last modified: 2013/04/02 00:04:50
+;; Last modified: 2013/04/03 00:13:50
 
 ;; 想定する環境:
 ;; * Windows 7/8 + Cygwin emacs-w32 24.3
@@ -796,13 +796,6 @@
 ;; (setq migemo-pattern-alist-length 1024)
 
 (migemo-init)
-
-;; ------------------------------------------------------------------------
-;; cygwin-mount
-
-(when system-type-is-windows
-  (require 'cygwin-mount)
-  (cygwin-mount-activate))
 
 ;; ------------------------------------------------------------------------
 ;; grep-edit
