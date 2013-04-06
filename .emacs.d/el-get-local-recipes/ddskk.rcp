@@ -1,6 +1,6 @@
 (:name ddskk
        :website "http://openlab.ring.gr.jp/skk/ddskk.html"
-       :description "A Japanese input method on Emacs."
+       :description "A Japanese input method on Emacs. [local]"
        :type http-tar
        :options ("xzf")
        :url "http://openlab.ring.gr.jp/skk/maintrunk/ddskk-20130331.tar.gz"

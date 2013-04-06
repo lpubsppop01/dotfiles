@@ -1,6 +1,6 @@
 ;; -*- mode: emacs-lisp ; coding: utf-8-unix -*-
 ;; ~/.emacs.d/init.el
-;; Last modified: 2013/04/03 00:13:50
+;; Last modified: 2013/04/06 23:52:48
 
 ;; 想定する環境:
 ;; * Windows 7/8 + Cygwin emacs-w32 24.3
@@ -411,6 +411,9 @@
 
 (add-to-list 'load-path "~/.emacs.d/el-get/el-get")
 
+;; FIXME: なぜだか load-path に ddskk が追加されないのでとりあえず
+(add-to-list 'load-path "~/.emacs.d/el-get/ddskk")
+
 (unless (require 'el-get nil 'noerror)
   (with-current-buffer
       (url-retrieve-synchronously
@@ -421,10 +424,6 @@
 
 (add-to-list 'el-get-recipe-path "~/.emacs.d/el-get-local-recipes")
 (setq el-get-user-package-directory "~/.emacs.d/el-get-init-files")
-
-;; FIXME: なぜだか load-path に ddskk が追加されないのでとりあえず
-(when (file-exists-p "~/.emacs.d/el-get/ddskk")
-  (add-to-list 'load-path "~/.emacs.d/el-get/ddskk"))
 
 (setq my:el-get-packages
       '(exec-path-from-shell
@@ -439,9 +438,11 @@
         auto-complete-clang
         quickrun
         ensime
-        howm))
+        howm
+        ddskk))
 
-(el-get 'sync my:el-get-packages)
+;; (el-get 'sync my:el-get-packages)
+(el-get 'sync)
 
 ;; package からレシピ自動生成
 ;; (el-get-elpa-build-local-recipes)
@@ -741,6 +742,10 @@
 ;; <http://stackoverflow.com/questions/9985313/copy-files-with-folders>
 ;; (setq ls-lisp-use-insert-directory-program nil)
 
+;; ddskk とのキーバインド衝突回避
+(when (fboundp 'skk-mode)
+  (global-set-key "\C-x\C-j" 'skk-mode))
+
 ;; ------------------------------------------------------------------------
 ;; dired+
 
@@ -749,13 +754,15 @@
 ;; ------------------------------------------------------------------------
 ;; elscreen
 
-(require 'elscreen)
-(require 'elscreen-dired)
-(require 'elscreen-howm)
+(when (require 'alist nil 'noerror)
+  (require 'elscreen)
+  (require 'elscreen-dired)
+  (require 'elscreen-howm)
 
-;; C-\t と C-S-\t で elscreen 間を移動
-(global-set-key (quote [C-tab]) 'elscreen-next)
-(global-set-key (quote [C-S-tab]) 'elscreen-previous)
+  ;; C-\t と C-S-\t で elscreen 間を移動
+  (global-set-key (quote [C-tab]) 'elscreen-next)
+  (global-set-key (quote [C-S-tab]) 'elscreen-previous)
+  )
 
 ;; ------------------------------------------------------------------------
 ;; jaspace
@@ -957,12 +964,6 @@
 
 (setq auto-mode-alist
       (append '(("\\.\\(cmd\\|bat\\)$" . cmd-mode)) auto-mode-alist))
-
-;; ------------------------------------------------------------------------
-;; w3m
-
-;; MELPA パッケージ版には w3m-load はないみたい
-(require 'w3m-load)
 
 ;; ------------------------------------------------------------------------
 ;; evernote-mode
