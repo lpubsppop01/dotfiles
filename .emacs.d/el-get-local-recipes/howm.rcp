@@ -1,6 +1,6 @@
 (:name howm
        :website "http://howm.sourceforge.jp/"
-       :description "Write fragmentarily and read collectively."
+       :description "Write fragmentarily and read collectively. [local]"
        :type http-tar
        :options ("xzf")
        :url "http://howm.sourceforge.jp/a/howm-1.4.1.tar.gz"
