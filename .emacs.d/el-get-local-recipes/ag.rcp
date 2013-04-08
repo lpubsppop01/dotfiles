@@ -1,0 +1,4 @@
+(:name ag
+       :description "ag [local]"
+       :type github
+       :pkgname "Wilfred/ag.el")

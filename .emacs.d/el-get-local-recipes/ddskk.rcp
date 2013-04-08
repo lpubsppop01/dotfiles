@@ -3,7 +3,7 @@
        :description "A Japanese input method on Emacs. [local]"
        :type http-tar
        :options ("xzf")
-       :url "http://openlab.ring.gr.jp/skk/maintrunk/ddskk-20130331.tar.gz"
+       :url "http://openlab.ring.gr.jp/skk/maintrunk/ddskk-20130407.tar.gz"
        :autoloads nil
        :info "doc/skk.info"
        :features ("skk-setup")

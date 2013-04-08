@@ -1,6 +1,6 @@
 ;; -*- mode: emacs-lisp ; coding: utf-8-unix -*-
 ;; ~/.emacs.d/init.el
-;; Last modified: 2013/04/06 23:52:48
+;; Last modified: 2013/04/08 23:13:04
 
 ;; 想定する環境:
 ;; * Windows 7/8 + Cygwin emacs-w32 24.3
@@ -190,6 +190,13 @@
   (interactive (list (read-shell-command "Shell command replace region: ")))
   (save-excursion
     (shell-command-on-region (point) (mark) command nil t)))
+
+;; ag
+;; <http://wata-jp.ldblog.jp/archives/1811534.html>
+(defun ag ()
+  (interactive)
+  (let ((grep-find-command "ag --nocolor --nogroup "))
+    (call-interactively 'grep-find)))
 
 ;; ------------------------------------------------------------------------
 ;; 標準機能のキーバインド
@@ -434,6 +441,8 @@
         Powershell
         scala-mode2
         helm
+        helm-ag
+        ag
         js2-mode js2-refactor ac-js2
         auto-complete-clang
         quickrun
