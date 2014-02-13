@@ -1,9 +1,11 @@
 ;; -*- mode: emacs-lisp ; coding: utf-8-unix -*-
 ;; ~/.emacs.d/init.el
-;; Last modified: 2013/04/08 23:13:04
+;; Last modified: 2014/02/13 10:57:30
 
 ;; 想定する環境:
-;; * Windows 7/8 + Cygwin emacs-w32 24.3
+;; * Windows 7/8/8.1 + gnupack emacs 24.3
+;; 動くかもしれないけど最近確認していない環境:
+;; * Windows 7/8/8.1 + Cygwin emacs-w32 24.3
 ;; * Mac OS X Mountain Lion + Cocoa Emacs 24.3
 
 ;; ------------------------------------------------------------------------
@@ -26,41 +28,68 @@
 ;; ------------------------------------------------------------------------
 ;; パス
 
-;; cygpath
-(when system-type-is-windows
-  (let ((cygwin-bin-directory (expand-file-name (concat (getenv "HOME") "/../../bin"))))
-    (setq my:cygpath-program (concat cygwin-bin-directory "/cygpath"))
-    (defun cygpath-wml (unix-path)
-      (let* ((quoted-unix-path (shell-quote-argument unix-path))
-             (command (concat my:cygpath-program " -wml " quoted-unix-path)))
-        (substring (shell-command-to-string command) 0 -1)))
-    (defun cygpath-u (windows-path)
-      (let* ((quoted-windows-path (shell-quote-argument windows-path))
-             (command (concat my:cygpath-program " -u " quoted-windows-path)))
-        (substring (shell-command-to-string command) 0 -1)))))
+;; -l オプションの対応
+;; <http://d.hatena.ne.jp/peccu/20130218/trial_init>
+(when load-file-name
+  ;; 設定ファイルの基準となるディレクトリを読み込んだ init.el のあるディレクトリへ変更
+  (setq user-emacs-directory (file-name-directory load-file-name)))
+(add-to-list 'load-path user-emacs-directory)
 
-;; HOME に移動
-(cd (getenv "HOME"))
+;; Cygwin
+(when (file-exists-p (concat (getenv "HOME")  "/../../Cygwin.bat"))
+  ;; cygpath
+  (when system-type-is-windows
+    (let ((cygwin-bin-directory (expand-file-name (concat (getenv "HOME") "/../../bin"))))
+      (setq my:cygpath-program (concat cygwin-bin-directory "/cygpath"))
+      (defun cygpath-wml (unix-path)
+        (let* ((quoted-unix-path (shell-quote-argument unix-path))
+                 (command (concat my:cygpath-program " -wml " quoted-unix-path)))
+          (substring (shell-command-to-string command) 0 -1)))
+      (defun cygpath-u (windows-path)
+        (let* ((quoted-windows-path (shell-quote-argument windows-path))
+               (command (concat my:cygpath-program " -u " quoted-windows-path)))
+          (substring (shell-command-to-string command) 0 -1)))))
+
+  ;; Cygwin の環境変数 PATH の内容を exec-path に設定
+  (when system-type-is-windows-nt
+    (let* ((bash-command (concat (getenv "HOME")  "/../../bin/bash"))
+           (bash-args "--login -c 'echo $PATH'")
+           (bash-env-path (shell-command-to-string (concat bash-command " " bash-args)))
+           (unix-paths (split-string bash-env-path ":"))
+           (windows-paths (mapcar #'cygpath-wml unix-paths)))
+      (setq exec-path windows-paths)))
+
+  ;; git が動くようにいろいろ設定
+  (setenv "LANG" "ja_JP.UTF-8")
+  (setenv "SSH_ASKPASS" "/usr/local/bin/win-ssh-askpass.exe")
+  )
+
+;; *NIX（Cygwin は含まない）
+(when (and system-type-is-unix-like (not system-type-is-windows))
+  ;; 環境変数 PATH の内容を exec-path に設定
+  (require 'exec-path-from-shell)
+  (exec-path-from-shell-initialize)
+  )
 
 ;; load-path に ~/.emacs.d/site-lisp を追加
 ;; normal-top-level-add-subdirs-to-load-path で default-directory を参照しているため一時的に変更
-(let ((default-directory "~/.emacs.d/site-lisp"))
+(let ((default-directory (locate-user-emacs-file "site-lisp")))
   (setq load-path (cons default-directory load-path))
   (normal-top-level-add-subdirs-to-load-path))
 
 ;; exec-path に ~/.emacs.d/bin を追加
-(setq exec-path (cons (expand-file-name "~/.emacs.d/bin") exec-path))
+(setq exec-path (cons (file-name-as-directory (locate-user-emacs-file "bin")) exec-path))
 
 ;; プラットフォーム依存のファイルを格納しているディレクトリパスを設定
 (when system-type-is-windows
-  (setq platform-dependent-directory (expand-file-name "~/.emacs.d/cygwin")))
+  (setq platform-dependent-directory (file-name-as-directory (locate-user-emacs-file "cygwin"))))
 (when system-type-is-gnu-linux
-  (setq platform-dependent-directory (expand-file-name "~/.emacs.d/gnu-linux")))
+  (setq platform-dependent-directory (file-name-as-directory (locate-user-emacs-file "gnu-linux"))))
 (when system-type-is-darwin
-  (setq platform-dependent-directory (expand-file-name "~/.emacs.d/darwin")))
+  (setq platform-dependent-directory (file-name-as-directory (locate-user-emacs-file "darwin"))))
 
 ;; exec-path に ~/.emacs.d/<platform>/bin を追加
-(setq exec-path (cons (concat platform-dependent-directory "/bin") exec-path))
+(setq exec-path (cons (concat platform-dependent-directory "bin") exec-path))
 
 ;; exec-path を環境変数 PATH に反映
 ;; shell-command や migemo では exec-path は考慮されないため
@@ -77,12 +106,12 @@
 
 ;; 環境変数 RUBYLIB に ~/.emacs.d/lib/ruby/site_ruby/1.9.1 を追加
 ;; (let ((rubylib (getenv "RUBYLIB"))
-;;       (additinal-directory "~/.emacs.d/lib/ruby/site_ruby/1.9.1"))
+;;       (additinal-directory (locate-user-emacs-file "lib/ruby/site_ruby/1.9.1")))
 ;;   (setenv "RUBYLIB" (if rubylib (concat additinal-directory ":" rubylib) additinal-directory)))
 
 ;; 環境変数 PYTHONPATH に ~/.emacs.d/lib/python を追加
 (let ((pythonpath (getenv "PYTHONPATH"))
-      (additinal-directory (expand-file-name "~/.emacs.d/lib/python")))
+      (additinal-directory (locate-user-emacs-file "lib/python")))
   (setenv "PYTHONPATH" (if pythonpath (concat additinal-directory ":" pythonpath) additinal-directory)))
 
 ;; ------------------------------------------------------------------------
@@ -105,26 +134,27 @@
 ;; ------------------------------------------------------------------------
 ;; IME
 
-;; (when system-type-is-windows
-;;   (setq default-input-method "W32-IME")
+(when system-type-is-windows
+  (setq default-input-method "W32-IME")
 
-;;   ;; IME 状態のモードライン表示
-;;   (setq-default w32-ime-mode-line-state-indicator "[Aa]")
-;;   (setq w32-ime-mode-line-state-indicator-list '("[Aa]" "[あ]" "[Aa]"))
+  ;; IME 状態のモードライン表示
+  (setq-default w32-ime-mode-line-state-indicator "[Aa]")
+  (setq w32-ime-mode-line-state-indicator-list '("[Aa]" "[あ]" "[Aa]"))
 
-;;   (w32-ime-initialize)
+  (w32-ime-initialize)
 
-;;   ;; 初期カーソルカラー（IME OFF）
-;;   (set-cursor-color "black")
+  ;; 初期カーソルカラー（IME OFF）
+  (set-cursor-color "black")
 
-;;   ;; IME ON/OFF 時のカーソルカラー
-;;   (add-hook 'input-method-activate-hook
-;;             (lambda() (set-cursor-color "blue")))
-;;   (add-hook 'input-method-inactivate-hook
-;;             (lambda() (set-cursor-color "black")))
+  ;; IME ON/OFF 時のカーソルカラー
+  (add-hook 'input-method-activate-hook
+            (lambda() (set-cursor-color "blue")))
+  (add-hook 'input-method-inactivate-hook
+            (lambda() (set-cursor-color "black")))
 
-;;   ;; バッファ切り替え時に IME 状態を引き継ぐ
-;;   (setq w32-ime-buffer-switch-p nil))
+  ;; バッファ切り替え時に IME 状態を引き継ぐ
+  (setq w32-ime-buffer-switch-p nil)
+  )
 
 ;; (when system-type-is-cygwin
 ;;   (require 'w32-ime)
@@ -338,7 +368,7 @@
 ;; バックアップファイルを指定場所に保存
 (setq make-backup-files t)
 (setq backup-directory-alist
-      (cons (cons "\\.*$" (expand-file-name "~/.emacs.d/backups"))
+      (cons (cons "\\.*$" (locate-user-emacs-file "backups"))
             backup-directory-alist))
 
 ;; デフォルトで無効になっている機能を有効化
@@ -408,18 +438,25 @@
 ;; ------------------------------------------------------------------------
 ;; ido-mode
 
-(require 'ido)
-(ido-mode t)
+;; (require 'ido)
+;; (ido-mode t)
 
 ;; ------------------------------------------------------------------------
 ;; el-get
 
 ;; インストールに失敗したときの作業が楽なように, ひと通り標準機能の設定が終わった後に実行
 
-(add-to-list 'load-path "~/.emacs.d/el-get/el-get")
+;; ~/.emacs.d が mklink で作成したシンボリックリンクである場合に
+;; el-get パッケージインストール後の autoload でファイルの比較に失敗する対策
+(when (and system-type-is-windows-nt (file-symlink-p (locate-user-emacs-file "")))
+  (let* ((base-dir (file-name-directory (locate-user-emacs-file "")))
+         (refered-dir-name (file-symlink-p (locate-user-emacs-file "")))
+         (true-user-emacs-dir (expand-file-name (file-name-as-directory (concat base-dir refered-dir-name))))
+         (true-el-get-dir (concat true-user-emacs-dir (file-name-as-directory "el-get"))))
+    (setq el-get-dir true-el-get-dir)
+    ))
 
-;; FIXME: なぜだか load-path に ddskk が追加されないのでとりあえず
-(add-to-list 'load-path "~/.emacs.d/el-get/ddskk")
+(add-to-list 'load-path (locate-user-emacs-file "el-get/el-get"))
 
 (unless (require 'el-get nil 'noerror)
   (with-current-buffer
@@ -429,32 +466,34 @@
       (goto-char (point-max))
       (eval-print-last-sexp))))
 
-(add-to-list 'el-get-recipe-path "~/.emacs.d/el-get-local-recipes")
-(setq el-get-user-package-directory "~/.emacs.d/el-get-init-files")
+(add-to-list 'el-get-recipe-path (locate-user-emacs-file "el-get-local-recipes"))
+(setq el-get-user-package-directory (locate-user-emacs-file "el-get-init-files"))
 
 (setq my:el-get-packages
-      '(exec-path-from-shell
-        auto-complete
+      '(auto-complete
         yasnippet
-        jedi
+        ;; jedi
         markdown-mode
-        Powershell
-        scala-mode2
+        ;; Powershell
+        ;; scala-mode2
         helm
-        helm-ag
-        ag
-        js2-mode js2-refactor ac-js2
-        auto-complete-clang
+        ;; helm-ag
+        ;; ag
+        ;; js2-mode js2-refactor ac-js2
+        ;; auto-complete-clang
         quickrun
-        ensime
-        howm
-        ddskk))
+        ;; ensime
+        howm))
 
 ;; (el-get 'sync my:el-get-packages)
 (el-get 'sync)
 
 ;; package からレシピ自動生成
 ;; (el-get-elpa-build-local-recipes)
+
+;; Cygwin git で "git submodule update *" 実行時に
+;; "error while loading shared libraries" となった場合は gettext があるか要確認:
+;; http://cygwin.1069669.n5.nabble.com/Re-shared-object-file-not-found-with-git-submodule-update-init-recursive-in-Cygwin-64-bit-td104123.html
 
 ;; ------------------------------------------------------------------------
 ;; auto-insert
@@ -906,7 +945,7 @@
 (autoload 'pymacs-exec "pymacs" nil t)
 (autoload 'pymacs-load "pymacs" nil t)
 ;; (eval-after-load "pymacs"
-;;   '(add-to-list 'pymacs-load-path "~/.emacs.d/my-pymacs"))
+;;   '(add-to-list 'pymacs-load-path (locate-user-emacs-file "my-pymacs")))
 
 ;; Cygwin 版 Python の python は Cygwin スタイルのシンボリックリンクのため
 ;; NTEmacs からは実行できない。
@@ -982,7 +1021,7 @@
 
 ;; (require 'evernote-mode)
 
-;; (setq enh-enclient-command (expand-file-name "~/.emacs.d/bin/enclient.rb"))
+;; (setq enh-enclient-command (locate-user-emacs-file "bin/enclient.rb"))
 ;; (setq evernote-enml-formatter-command '("w3m" "-dump" "-I" "UTF8" "-O" "UTF8"))
 ;; (setq evernote-username "lpubsppop01")
 
@@ -1007,14 +1046,14 @@
 ;; ------------------------------------------------------------------------
 ;; customize
 
-(setq custom-file "~/.emacs.d/custom.el")
+(setq custom-file (locate-user-emacs-file "custom.el"))
 (if (file-exists-p (expand-file-name custom-file))
     (load (expand-file-name custom-file) t nil nil))
 
 ;; ------------------------------------------------------------------------
 ;; desktop
 
-(setq desktop-path (list "~/.emacs.d/")
+(setq desktop-path (list (locate-user-emacs-file "."))
       desktop-base-file-name "emacs.desktop"
       desktop-base-lock-name "emacs.desktop.lock")
 (desktop-save-mode t)
