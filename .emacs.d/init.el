@@ -1,6 +1,6 @@
 ;; -*- mode: emacs-lisp ; coding: utf-8-unix -*-
 ;; ~/.emacs.d/init.el
-;; Last modified: 2014/02/13 10:57:30
+;; Last modified: 2014/07/12 23:49:49
 
 ;; 想定する環境:
 ;; * Windows 7/8/8.1 + gnupack emacs 24.3
@@ -479,13 +479,14 @@
         helm
         ;; helm-ag
         ;; ag
-        ;; js2-mode js2-refactor ac-js2
         ;; auto-complete-clang
         quickrun
         ;; ensime
         howm))
 
 ;; (el-get 'sync my:el-get-packages)
+;; (el-get '(tss json-mode)) ; TypeScript
+;; (el-get '(js2-mode js2-refactor ac-js2)) ; JavaScript
 (el-get 'sync)
 
 ;; package からレシピ自動生成
