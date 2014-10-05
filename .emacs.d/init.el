@@ -1,6 +1,6 @@
 ;; -*- mode: emacs-lisp ; coding: utf-8-unix -*-
 ;; ~/.emacs.d/init.el
-;; Last modified: 2014/10/05 18:12:55
+;; Last modified: 2014/10/05 23:59:30
 
 ;; 想定する環境:
 ;; * Windows 7/8/8.1 + gnupack emacs 24.3
@@ -39,7 +39,7 @@
 (let* ((cygwin-root-directory-auto (concat (getenv "HOME") "/../.."))
        (cygwin-root-directory cygwin-root-directory-auto))
   (when (file-exists-p (concat cygwin-root-directory "/Cygwin.bat"))
-    ;; cygpath
+    ;; cygpath, uname
     (when system-type-is-windows
       (let ((cygwin-bin-directory (expand-file-name (concat cygwin-root-directory "/bin"))))
         (setq my:cygpath-program (concat cygwin-bin-directory "/cygpath"))
@@ -50,6 +50,10 @@
         (defun cygpath-u (windows-path)
           (let* ((quoted-windows-path (shell-quote-argument windows-path))
                  (command (concat my:cygpath-program " -u " quoted-windows-path)))
+            (substring (shell-command-to-string command) 0 -1)))
+        (setq my:uname-program (concat cygwin-bin-directory "/uname"))
+        (defun uname-m ()
+          (let ((command (concat my:uname-program " -m")))
             (substring (shell-command-to-string command) 0 -1)))))
 
     ;; Cygwin の環境変数 PATH の内容を exec-path に設定
@@ -83,8 +87,10 @@
 (setq exec-path (cons (file-name-as-directory (locate-user-emacs-file "bin")) exec-path))
 
 ;; プラットフォーム依存のファイルを格納しているディレクトリパスを設定
-(when system-type-is-windows
-  (setq platform-dependent-directory (file-name-as-directory (locate-user-emacs-file "cygwin"))))
+(when (and system-type-is-windows (fboundp 'uname-m))
+  (let* ((cygwin-platform-is-x86_64 (string-equal "x86_64" (uname-m)))
+         (dir-name (if cygwin-platform-is-x86_64 "cygwin64" "cygwin")))
+    (setq platform-dependent-directory (file-name-as-directory (locate-user-emacs-file dir-name)))))
 (when system-type-is-gnu-linux
   (setq platform-dependent-directory (file-name-as-directory (locate-user-emacs-file "gnu-linux"))))
 (when system-type-is-darwin
