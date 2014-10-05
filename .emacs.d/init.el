@@ -1,6 +1,6 @@
 ;; -*- mode: emacs-lisp ; coding: utf-8-unix -*-
 ;; ~/.emacs.d/init.el
-;; Last modified: 2014/07/13 00:13:41
+;; Last modified: 2014/10/05 18:12:55
 
 ;; 想定する環境:
 ;; * Windows 7/8/8.1 + gnupack emacs 24.3
@@ -36,33 +36,35 @@
 (add-to-list 'load-path user-emacs-directory)
 
 ;; Cygwin
-(when (file-exists-p (concat (getenv "HOME")  "/../../Cygwin.bat"))
-  ;; cygpath
-  (when system-type-is-windows
-    (let ((cygwin-bin-directory (expand-file-name (concat (getenv "HOME") "/../../bin"))))
-      (setq my:cygpath-program (concat cygwin-bin-directory "/cygpath"))
-      (defun cygpath-wml (unix-path)
-        (let* ((quoted-unix-path (shell-quote-argument unix-path))
+(let* ((cygwin-root-directory-auto (concat (getenv "HOME") "/../.."))
+       (cygwin-root-directory cygwin-root-directory-auto))
+  (when (file-exists-p (concat cygwin-root-directory "/Cygwin.bat"))
+    ;; cygpath
+    (when system-type-is-windows
+      (let ((cygwin-bin-directory (expand-file-name (concat cygwin-root-directory "/bin"))))
+        (setq my:cygpath-program (concat cygwin-bin-directory "/cygpath"))
+        (defun cygpath-wml (unix-path)
+          (let* ((quoted-unix-path (shell-quote-argument unix-path))
                  (command (concat my:cygpath-program " -wml " quoted-unix-path)))
-          (substring (shell-command-to-string command) 0 -1)))
-      (defun cygpath-u (windows-path)
-        (let* ((quoted-windows-path (shell-quote-argument windows-path))
-               (command (concat my:cygpath-program " -u " quoted-windows-path)))
-          (substring (shell-command-to-string command) 0 -1)))))
+            (substring (shell-command-to-string command) 0 -1)))
+        (defun cygpath-u (windows-path)
+          (let* ((quoted-windows-path (shell-quote-argument windows-path))
+                 (command (concat my:cygpath-program " -u " quoted-windows-path)))
+            (substring (shell-command-to-string command) 0 -1)))))
 
-  ;; Cygwin の環境変数 PATH の内容を exec-path に設定
-  (when system-type-is-windows-nt
-    (let* ((bash-command (concat (getenv "HOME")  "/../../bin/bash"))
-           (bash-args "--login -c 'echo $PATH'")
-           (bash-env-path (shell-command-to-string (concat bash-command " " bash-args)))
-           (unix-paths (split-string bash-env-path ":"))
-           (windows-paths (mapcar #'cygpath-wml unix-paths)))
-      (setq exec-path windows-paths)))
+    ;; Cygwin の環境変数 PATH の内容を exec-path に設定
+    (when system-type-is-windows-nt
+      (let* ((bash-command (concat cygwin-root-directory "/bin/bash"))
+             (bash-args "--login -c 'echo $PATH'")
+             (bash-env-path (shell-command-to-string (concat bash-command " " bash-args)))
+             (unix-paths (split-string bash-env-path ":"))
+             (windows-paths (mapcar #'cygpath-wml unix-paths)))
+        (setq exec-path windows-paths)))
 
-  ;; git が動くようにいろいろ設定
-  (setenv "LANG" "ja_JP.UTF-8")
-  (setenv "SSH_ASKPASS" "/usr/local/bin/win-ssh-askpass.exe")
-  )
+    ;; git が動くようにいろいろ設定
+    (setenv "LANG" "ja_JP.UTF-8")
+    (setenv "SSH_ASKPASS" "/usr/local/bin/win-ssh-askpass.exe")
+    ))
 
 ;; *NIX（Cygwin は含まない）
 (when (and system-type-is-unix-like (not system-type-is-windows))
@@ -228,6 +230,13 @@
   (let ((grep-find-command "ag --nocolor --nogroup "))
     (call-interactively 'grep-find)))
 
+;; 大文字小文字を区別しない行ソート
+;; <http://stackoverflow.com/questions/20967818/emacs-function-to-case-insensitive-sort-lines>
+(defun sort-lines-nocase ()
+  (interactive)
+  (let ((sort-fold-case t))
+    (call-interactively 'sort-lines)))
+
 ;; ------------------------------------------------------------------------
 ;; 標準機能のキーバインド
 
@@ -379,7 +388,7 @@
 ;; compile のウインドウサイズ
 (setq compilation-window-height 10)
 ;; compile のウインドウ自動スクロール
-(setq compilation-scroll-output t) 
+(setq compilation-scroll-output t)
 
 ;; 括弧の対応表示
 (show-paren-mode t)
@@ -397,6 +406,12 @@
 
 ;; デバッグ有効
 (setq debug-on-error t)
+
+;; ファイル末尾の改行がないとき確認
+(setq mode-require-final-newline 0)
+
+;; Cygwin grep で NUL ではなく /dev/null を見るように
+(setq null-device "/dev/null")
 
 ;; ------------------------------------------------------------------------
 ;; スクロール
@@ -430,8 +445,8 @@
 (if (not (memq 'time-stamp write-file-hooks))
     (setq write-file-hooks (cons 'time-stamp write-file-hooks)))
 
-;; ファイル先頭から 20 行まで検索
-(setq time-stamp-line-limit 20)
+;; ファイル先頭から 25 行まで検索
+(setq time-stamp-line-limit 25)
 ;; ファイル末尾から 5 行まで検索
 ;; (setq time-stamp-line-limit -5)
 
@@ -471,22 +486,23 @@
 
 (setq my:el-get-packages
       '(auto-complete
-        yasnippet
+        ;; yasnippet
         ;; jedi
-        markdown-mode
+        ;; markdown-mode
         ;; Powershell
         ;; scala-mode2
         helm
         ;; helm-ag
         ;; ag
         ;; auto-complete-clang
-        quickrun
+        ;; quickrun
         ;; ensime
         howm))
 
 ;; (el-get 'sync my:el-get-packages)
 ;; (el-get 'sync '(tss json-mode)) ; TypeScript
 ;; (el-get 'sync '(js2-mode js2-refactor ac-js2)) ; JavaScript
+;; (el-get 'sync '(csharp-mode))) ; C#
 (el-get 'sync)
 
 ;; package からレシピ自動生成
@@ -528,7 +544,7 @@
 ;; テンプレート定義
 (setq auto-insert-alist
       (append
-       '((("\\.\\([Cc]\\|cc\\|cpp\\|cxx\\)\\'" . "C/C++ program")  
+       '((("\\.\\([Cc]\\|cc\\|cpp\\|cxx\\)\\'" . "C/C++ program")
           "C/C++ program: "
           "// -*- coding: utf-8-unix -*-\n"
           "\n"
@@ -536,7 +552,7 @@
           " *  \n"
           " *  @author " user-full-name "\n"
           " *  Created: " (concat (time-stamp-yyyy/mm/dd) " " (time-stamp-hh:mm:ss)) "\n"
-          " *  Last modified: \n" 
+          " *  Last modified: \n"
           " */\n"
           "\n"
           "\n"
@@ -550,7 +566,7 @@
           " *  \n"
           " *  @author " user-full-name "\n"
           " *  Created: " (concat (time-stamp-yyyy/mm/dd) " " (time-stamp-hh:mm:ss)) "\n"
-          " *  Last modified: \n" 
+          " *  Last modified: \n"
           " */\n"
           "\n"
           "#ifndef " (c-include-guard-name (buffer-file-name)) "\n"
@@ -652,7 +668,7 @@
           " *  \n"
           " *  @author " user-full-name "\n"
           " *  Created: " (concat (time-stamp-yyyy/mm/dd) " " (time-stamp-hh:mm:ss)) "\n"
-          " *  Last modified: \n" 
+          " *  Last modified: \n"
           " */\n"
           "\n"
           "\n"
@@ -666,7 +682,7 @@
           " * File name: " (file-name-nondirectory (buffer-file-name)) "\n"
           " * Author: " user-full-name "\n"
           " * Created: " (concat (time-stamp-yyyy/mm/dd) " " (time-stamp-hh:mm:ss)) "\n"
-          " * Last modified: \n" 
+          " * Last modified: \n"
           " */\n"
           "\n")
          (("[Mm]akefile" . "Makefile")
@@ -803,6 +819,7 @@
 ;; ------------------------------------------------------------------------
 ;; elscreen
 
+;; alist はたぶん APEL に含まれているので howm を el-get で入れれば入るはず
 (when (require 'alist nil 'noerror)
   (require 'elscreen)
   (require 'elscreen-dired)
@@ -816,10 +833,11 @@
 ;; ------------------------------------------------------------------------
 ;; jaspace
 
-(require 'jaspace)
+;; whitespace-mode に置き換えたためコメントアウト
+;; (require 'jaspace)
 
 ;; jaspace-mode を常に有効化
-(jaspace-mode-on)
+;; (jaspace-mode-on)
 ;; 各モードで jaspace-mode を有効化
 ;; (add-hook 'c-mode-common-hook '(lambda () (jaspace-mode-on)))
 ;; (add-hook 'emacs-lisp-mode-hook '(lambda () (jaspace-mode-on)))
@@ -827,11 +845,45 @@
 ;; (add-hook 'scala-mode-hook '(lambda () (jaspace-mode-on)))
 
 ;; 全角空白を表す文字
-(setq jaspace-alternate-jaspace-string "□")
+;; (setq jaspace-alternate-jaspace-string "□")
 ;; 改行文字を表す文字
-(setq jaspace-alternate-eol-string "\xab\n")
+;; (setq jaspace-alternate-eol-string "\xab\n")
 ;; タブ文字を表示
-(setq jaspace-highlight-tabs t)
+;; (setq jaspace-highlight-tabs t)
+
+;; -----------------------------------------------------------------------------------
+;; whitespace-mode
+
+;; jaspace ライクな表示＋常時オン
+;; <http://piyolian.blogspot.jp/2011/12/emacs-whitespace-like-jaspace.html>
+(when (and (>= emacs-major-version 23)
+           (require 'whitespace nil t))
+  (setq whitespace-style
+        '(face
+          tabs spaces newline trailing space-before-tab space-after-tab
+          space-mark tab-mark newline-mark))
+  (let ((dark (eq 'dark (frame-parameter nil 'background-mode))))
+    (set-face-attribute 'whitespace-space nil
+                        :foreground (if dark "pink4" "azure3")
+                        :background 'unspecified)
+    (set-face-attribute 'whitespace-tab nil
+                        :foreground (if dark "gray20" "gray80")
+                        :background 'unspecified
+                        :strike-through t)
+    (set-face-attribute 'whitespace-newline nil
+                        :foreground (if dark "darkcyan" "darkseagreen")))
+  (setq whitespace-space-regexp "\\(　+\\)")
+  (setq whitespace-display-mappings
+        '((space-mark   ?\xA0  [?\xA4]  [?_]) ; hard space - currency
+          (space-mark   ?\x8A0 [?\x8A4] [?_]) ; hard space - currency
+          (space-mark   ?\x920 [?\x924] [?_]) ; hard space - currency
+          (space-mark   ?\xE20 [?\xE24] [?_]) ; hard space - currency
+          (space-mark   ?\xF20 [?\xF24] [?_]) ; hard space - currency
+          (space-mark   ?　    [?□]    [?＿]) ; full-width space - square
+          (newline-mark ?\n    [?\xAB ?\n])   ; eol - right quote mark
+          ))
+  (setq whitespace-global-modes '(not dired-mode tar-mode))
+  (global-whitespace-mode 1))
 
 ;; ------------------------------------------------------------------------
 ;; migemo
@@ -868,7 +920,7 @@
 ;; ------------------------------------------------------------------------
 ;; c-mode
 
-(add-hook 'c-mode-hook 
+(add-hook 'c-mode-hook
           '(lambda ()
              (define-key c-mode-map "\C-c\C-c" 'comment-or-compile)
              ;; コメントを "//" にする
@@ -878,7 +930,7 @@
 ;; ------------------------------------------------------------------------
 ;; c++-mode
 
-(add-hook 'c++-mode-hook 
+(add-hook 'c++-mode-hook
           '(lambda ()
              (define-key c++-mode-map "\C-c\C-c" 'comment-or-compile)
              (c-set-offset 'innamespace 0)))
@@ -1002,11 +1054,6 @@
       (cons '("\\.\\(css\\|CSS\\)$" . css-mode) auto-mode-alist))
 
 ;; ------------------------------------------------------------------------
-;; csharp-mode
-
-;; TODO
-
-;; ------------------------------------------------------------------------
 ;; cmd-mode
 
 (autoload 'cmd-mode "cmd-mode" "CMD mode." t)
@@ -1039,10 +1086,8 @@
 
 (server-start)
 
-(add-hook 'server-mode-hook
-         (lambda ()
-           (require 'elscreen-server)
-           (auto-revert-mode t)))
+(require 'elscreen-server) ; (server-start) より後ろがよいらしい
+(global-auto-revert-mode t) ; 上に移動した方がよいかなー
 
 ;; ------------------------------------------------------------------------
 ;; customize
