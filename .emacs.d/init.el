@@ -1,9 +1,9 @@
 ;; -*- mode: emacs-lisp ; coding: utf-8-unix -*-
 ;; ~/.emacs.d/init.el
-;; Last modified: 2014/10/05 23:59:30
+;; Last modified: 2016/07/03 20:09:10
 
 ;; 想定する環境:
-;; * Windows 7/8/8.1 + gnupack emacs 24.3
+;; * Windows 7/8/8.1/10 + emacs-24.5-IME-patched
 ;; 動くかもしれないけど最近確認していない環境:
 ;; * Windows 7/8/8.1 + Cygwin emacs-w32 24.3
 ;; * Mac OS X Mountain Lion + Cocoa Emacs 24.3
@@ -33,7 +33,7 @@
 (when load-file-name
   ;; 設定ファイルの基準となるディレクトリを読み込んだ init.el のあるディレクトリへ変更
   (setq user-emacs-directory (file-name-directory load-file-name)))
-(add-to-list 'load-path user-emacs-directory)
+;; (add-to-list 'load-path user-emacs-directory) ; 24.3 -> 24.5 で警告が出た
 
 ;; Cygwin
 (let* ((cygwin-root-directory-auto (concat (getenv "HOME") "/../.."))
