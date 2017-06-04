@@ -1,6 +1,6 @@
 ;; -*- mode: emacs-lisp ; coding: utf-8-unix -*-
 ;; ~/.emacs.d/init.el
-;; Last modified: 2017/06/04 20:16:55
+;; Last modified: 2017/06/04 23:11:31
 
 ;; 想定する環境:
 ;; * Windows 10 + emacs 25.2
@@ -78,6 +78,7 @@
 (setq exec-path (cons (file-name-as-directory (locate-user-emacs-file "bin")) exec-path))
 
 ;; プラットフォーム依存のファイルを格納しているディレクトリパスを設定
+(setq platform-dependent-directory "")
 (when (and system-type-is-windows (fboundp 'uname-m))
   (let* ((cygwin-platform-is-x86_64 (string-equal "x86_64" (uname-m)))
          (dir-name (if cygwin-platform-is-x86_64 "cygwin64" "cygwin")))
@@ -254,6 +255,14 @@
                  (locate-user-emacs-file "site-lisp/elscreen/elscreen-server.el") t)
   )
 
+(defun can-execute-command-p (command)
+  "コマンドが実行可能か判定。which の方は試してない。"
+  (interactive)
+  (if system-type-is-windows
+      (= (shell-command (concat "where " command) nil nil) 0)
+    (= (shell-command (concat "which " command) nil nil) 0))
+  )
+
 ;; ------------------------------------------------------------------------
 ;; 標準機能のキーバインド
 
@@ -280,26 +289,7 @@
 ;; ------------------------------------------------------------------------
 ;; GUI
 
-(when window-system
-  ;; ツールバーを表示しない
-  (tool-bar-mode 0)
-  ;; メニューバーを表示しない
-  (menu-bar-mode 0)
-  ;; スクロールバーは右側
-  (set-scroll-bar-mode 'right)
-
-  ;; 起動時スプラッシュを表示しない
-  (setq inhibit-startup-message t)
-
-  ;; フォントセット定義
-  ;; - サイズを指定しない方が DPI に適当に合わせてくれているような？
-  ;; - ウィンドウ位置も覚えているようなので default-frame 設定も消してみる
-  (create-fontset-from-ascii-font "Migu 1m:weight=normal:slant=normal" nil "migu1m")
-  (set-fontset-font "fontset-migu1m" 'ascii (font-spec :family "Migu 1m"))
-  (set-fontset-font "fontset-migu1m" 'unicode (font-spec :family "Migu 1m"))
-  (set-fontset-font "fontset-migu1m" 'japanese-jisx0208 (font-spec :family "Migu 1m"))
-  (set-fontset-font "fontset-migu1m" 'katakana-jisx0201 (font-spec :family "Migu 1m"))
-  )
+;; ※GUI 設定は custom.el にて各環境で行う。
 
 ;; ------------------------------------------------------------------------
 ;; マウス
@@ -813,18 +803,15 @@
 ;; ------------------------------------------------------------------------
 ;; elscreen
 
-;; alist はたぶん APEL に含まれているので howm を el-get で入れれば入るはず
-(when (require 'alist nil 'noerror)
-  (require 'elscreen)
-  (require 'elscreen-dired)
-  (require 'elscreen-howm)
+(require 'elscreen)
+(require 'elscreen-dired)
+(require 'elscreen-howm)
 
-  (elscreen-start)
+(elscreen-start)
 
-  ;; C-\t と C-S-\t で elscreen 間を移動
-  (global-set-key (quote [C-tab]) 'elscreen-next)
-  (global-set-key (quote [C-S-tab]) 'elscreen-previous)
-  )
+;; C-\t と C-S-\t で elscreen 間を移動
+(global-set-key (quote [C-tab]) 'elscreen-next)
+(global-set-key (quote [C-S-tab]) 'elscreen-previous)
 
 ;; ------------------------------------------------------------------------
 ;; jaspace
@@ -884,22 +871,24 @@
 ;; ------------------------------------------------------------------------
 ;; migemo
 
-(require 'migemo)
+(when (can-execute-command-p "cmigemo")
+  (require 'migemo)
 
-(setq migemo-command "cmigemo")
-(setq migemo-options '("-q" "--emacs"))
-(setq migemo-dictionary (concat platform-dependent-directory "share/migemo/utf-8/migemo-dict"))
-(setq migemo-user-dictionary nil)
-(setq migemo-regex-dictionary nil)
-(setq migemo-coding-system 'utf-8-unix)
+  (setq migemo-command "cmigemo")
+  (setq migemo-options '("-q" "--emacs"))
+  (setq migemo-dictionary (concat platform-dependent-directory "share/migemo/utf-8/migemo-dict"))
+  (setq migemo-user-dictionary nil)
+  (setq migemo-regex-dictionary nil)
+  (setq migemo-coding-system 'utf-8-unix)
 
-;; キャッシュを有効化
-;; NTEmacs24 + Cygwin 環境では有効にすると動作しなかった
-;; (setq migemo-use-pattern-alist t)
-;; (setq migemo-use-frequent-pattern-alist t)
-;; (setq migemo-pattern-alist-length 1024)
+  ;; キャッシュを有効化
+  ;; NTEmacs24 + Cygwin 環境では有効にすると動作しなかった
+  ;; (setq migemo-use-pattern-alist t)
+  ;; (setq migemo-use-frequent-pattern-alist t)
+  ;; (setq migemo-pattern-alist-length 1024)
 
-(migemo-init)
+  (migemo-init)
+)
 
 ;; ------------------------------------------------------------------------
 ;; text-mode
