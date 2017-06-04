@@ -5,8 +5,8 @@
 ;; 想定する環境:
 ;; * Windows 10 + emacs 25.2
 ;; 過去に想定していた環境:
+;; * Mac OS X EI Capitan + emacs 24.5
 ;; * Windows 7/8/8.1 + Cygwin emacs-w32 24.3
-;; * Mac OS X Mountain Lion + Cocoa Emacs 24.3
 
 ;; ------------------------------------------------------------------------
 ;; ユーザー情報
@@ -68,13 +68,6 @@
     (setenv "SSH_ASKPASS" "/usr/local/bin/win-ssh-askpass.exe")
     ))
 
-;; *NIX（Cygwin は含まない）
-(when (and system-type-is-unix-like (not system-type-is-windows))
-  ;; 環境変数 PATH の内容を exec-path に設定
-  (require 'exec-path-from-shell)
-  (exec-path-from-shell-initialize)
-  )
-
 ;; load-path に ~/.emacs.d/site-lisp を追加
 ;; normal-top-level-add-subdirs-to-load-path で default-directory を参照しているため一時的に変更
 (let ((default-directory (locate-user-emacs-file "site-lisp")))
@@ -93,6 +86,11 @@
   (setq platform-dependent-directory (file-name-as-directory (locate-user-emacs-file "gnu-linux"))))
 (when system-type-is-darwin
   (setq platform-dependent-directory (file-name-as-directory (locate-user-emacs-file "darwin"))))
+
+;; "~" を HOME の値に置換
+;; * Mac OS X にて、migemo-dictionary が ~ を含むパスだと cmigemo が辞書を見つけられないことがあったため。
+(let ((home-path (getenv "HOME")))
+  (setq platform-dependent-directory (replace-regexp-in-string "~" home-path platform-dependent-directory)))
 
 ;; exec-path に ~/.emacs.d/<platform>/bin を追加
 (setq exec-path (cons (concat platform-dependent-directory "bin") exec-path))
@@ -890,7 +888,7 @@
 
 (setq migemo-command "cmigemo")
 (setq migemo-options '("-q" "--emacs"))
-(setq migemo-dictionary (concat platform-dependent-directory "/share/migemo/utf-8/migemo-dict"))
+(setq migemo-dictionary (concat platform-dependent-directory "share/migemo/utf-8/migemo-dict"))
 (setq migemo-user-dictionary nil)
 (setq migemo-regex-dictionary nil)
 (setq migemo-coding-system 'utf-8-unix)
