@@ -90,8 +90,9 @@
 
 ;; "~" を HOME の値に置換
 ;; * Mac OS X にて、migemo-dictionary が ~ を含むパスだと cmigemo が辞書を見つけられないことがあったため。
-(let ((home-path (getenv "HOME")))
-  (setq platform-dependent-directory (replace-regexp-in-string "~" home-path platform-dependent-directory)))
+(when system-type-is-unix-like
+  (let ((home-path (getenv "HOME")))
+    (setq platform-dependent-directory (replace-regexp-in-string "~" home-path platform-dependent-directory))))
 
 ;; exec-path に ~/.emacs.d/<platform>/bin を追加
 (setq exec-path (cons (concat platform-dependent-directory "bin") exec-path))
