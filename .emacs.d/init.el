@@ -1,6 +1,6 @@
 ;; -*- mode: emacs-lisp ; coding: utf-8-unix -*-
 ;; ~/.emacs.d/init.el
-;; Last modified: 2017/06/04 17:00:29
+;; Last modified: 2017/06/04 20:16:55
 
 ;; 想定する環境:
 ;; * Windows 10 + emacs 25.2
@@ -28,12 +28,10 @@
 ;; ------------------------------------------------------------------------
 ;; パス
 
-;; -l オプションの対応
-;; <http://d.hatena.ne.jp/peccu/20130218/trial_init>
+;; -l オプションの対応 <http://d.hatena.ne.jp/peccu/20130218/trial_init>
+;; - locate-user-emacs-file に相対パスを渡すと user-emacs-directory 基準のパスが返る
 (when load-file-name
-  ;; 設定ファイルの基準となるディレクトリを読み込んだ init.el のあるディレクトリへ変更
   (setq user-emacs-directory (file-name-directory load-file-name)))
-(add-to-list 'load-path user-emacs-directory)
 
 ;; Cygwin
 (let* ((cygwin-root-directory-auto (concat (getenv "HOME") "/../.."))
@@ -242,6 +240,21 @@
   (interactive)
   (let ((sort-fold-case t))
     (call-interactively 'sort-lines)))
+
+(defun update-user-site-lisp ()
+  "~/.emacs.d/site-lisp に配置している elisp ファイルを更新。"
+  (interactive)
+  (url-copy-file "https://raw.githubusercontent.com/emacs-jp/migemo/master/migemo.el"
+                 (locate-user-emacs-file "site-lisp/migemo.el"))
+  (url-copy-file "https://raw.githubusercontent.com/knu/elscreen/master/elscreen.el"
+                 (locate-user-emacs-file "site-lisp/elscreen/elscreen.el") t)
+  (url-copy-file "https://raw.githubusercontent.com/knu/elscreen/master/elscreen-dired.el"
+                 (locate-user-emacs-file "site-lisp/elscreen/elscreen-dired.el") t)
+  (url-copy-file "https://raw.githubusercontent.com/knu/elscreen/master/elscreen-howm.el"
+                 (locate-user-emacs-file "site-lisp/elscreen/elscreen-howm.el") t)
+  (url-copy-file "https://raw.githubusercontent.com/knu/elscreen/master/elscreen-server.el"
+                 (locate-user-emacs-file "site-lisp/elscreen/elscreen-server.el") t)
+  )
 
 ;; ------------------------------------------------------------------------
 ;; 標準機能のキーバインド
@@ -808,6 +821,8 @@
   (require 'elscreen-dired)
   (require 'elscreen-howm)
 
+  (elscreen-start)
+
   ;; C-\t と C-S-\t で elscreen 間を移動
   (global-set-key (quote [C-tab]) 'elscreen-next)
   (global-set-key (quote [C-S-tab]) 'elscreen-previous)
@@ -887,11 +902,6 @@
 ;; (setq migemo-pattern-alist-length 1024)
 
 (migemo-init)
-
-;; ------------------------------------------------------------------------
-;; grep-edit
-
-(require 'grep-edit)
 
 ;; ------------------------------------------------------------------------
 ;; text-mode

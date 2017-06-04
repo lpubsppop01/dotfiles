@@ -1,11 +1,13 @@
-;; -*- mode: Emacs-Lisp; coding: euc-jp-unix -*-
-;;; migemo.el - Japanese incremental search trough dynamic pattern expansion
+;;; migemo.el --- Japanese incremental search through dynamic pattern expansion -*- lexical-binding: t; -*-
 
-;; $Id: migemo.el.in,v 1.7 2005/05/22 08:39:02 satoru-t Exp $
+;; $Id: migemo.el.in,v 1.9 2012/06/24 04:09:59 kaworu Exp $
 ;; Copyright (C) Satoru Takabayashi
 
 ;; Author: Satoru Takabayashi <satoru-t@is.aist-nara.ac.jp>
+;; URL: https://github.com/emacs-jp/migemo
+;; Version: 1.9.1
 ;; Keywords:
+;; Package-Requires: ((cl-lib "0.5"))
 
 ;; This file is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -24,9 +26,12 @@
 
 ;;; Commentary:
 
-;; https://github.com/Hideyuki-SHIRAI/migemo-for-ruby1.9/raw/master/migemo.el.in
+;;
 
 ;;; Code:
+
+(require 'cl-lib)
+
 (defgroup migemo nil
   "migemo - Japanese incremental search trough dynamic pattern expansion."
   :group 'matching)
@@ -38,20 +43,9 @@
 		 (const :tag "CMIGEMO" "cmigemo")
 		 (string :tag "Other")))
 
-(defcustom migemo-use-shy-group (if (string-match "\\(?:a\\)" "a") t nil)
-  "*Use shy group for regexp."
-  :group 'migemo
-  :type '(choice (const :tag "Use shy group" t)
-		 (const :tag "No use shy group" nil)))
-
 ;; -t emacs for specifying the type of regular expression.
 ;;  "-i" "\a" for searching a word over multi-lines.
-(defcustom migemo-options `("-S" "migemo"
-			    "-p"
-			    "-t"
-			    ,(if migemo-use-shy-group
-				 "emacsshy" "emacs")
-			    "-i" "\a")
+(defcustom migemo-options '("-S" "migemo" "-t" "emacs"  "-i" "\a")
   "*Options for migemo command."
   :group 'migemo
   :type '(repeat string))
@@ -78,6 +72,11 @@
   :group 'migemo
   :type 'boolean)
 
+(defcustom migemo-use-default-isearch-keybinding t
+  "*If non-nil, set migemo default keybinding for isearch in `migemo-init'."
+  :group 'migemo
+  :type 'boolean)
+
 (defcustom migemo-dictionary (expand-file-name "migemo-dict" migemo-directory)
   "*Migemo dictionary file."
   :group 'migemo
@@ -95,22 +94,11 @@
   :type '(choice (file :must-match t)
 		 (const :tag "Do not use" nil)))
 
-(defcustom migemo-pattern-separator-regex "[.,]"
-  "*Regex to divide segmentations."
+(defcustom migemo-pre-conv-function nil
+  "*Function of migemo pre-conversion."
   :group 'migemo
-  :type 'regexp)
-
-(defcustom migemo-pattern-parser-function 'migemo-get-pattern-upcase-kugiri
-  "*Parser of input pattern."
-  :group 'migemo
-  :type '(choice (const :tag "Not divide segments like old migemo"
-			migemo-get-pattern-1)
-		 (const :tag "Divide segments with a uppercase character"
-			migemo-get-pattern-upcase-kugiri)
-		 (const :tag "Divide segments with a space character"
-			migemo-get-pattern-space-kugiri)
-		 (const :tag "Accordance with migemo command" nil)
-		 (function :tag "User function")))
+  :type '(choice (const :tag "Do not use" nil)
+		 function))
 
 (defcustom migemo-after-conv-function nil
   "*Function of migemo after-conversion."
@@ -119,14 +107,15 @@
 		 function))
 
 (defcustom migemo-coding-system
-  (if (>= emacs-major-version 20)
-      (if (featurep 'mule)
-	  (if (string-match "XEmacs" emacs-version)
-	      (cond
-	       ((memq 'euc-japan-unix (coding-system-list)) 'euc-japan-unix)
-	       ((memq 'euc-jp-unix (coding-system-list)) 'euc-jp-unix))
-	    'euc-japan-unix))
-    (and (boundp 'MULE) *euc-japan*unix))
+  (with-no-warnings
+    (if (>= emacs-major-version 20)
+        (if (featurep 'mule)
+            (if (string-match "XEmacs" emacs-version)
+                (cond
+                 ((memq 'euc-japan-unix (coding-system-list)) 'euc-japan-unix)
+                 ((memq 'euc-jp-unix (coding-system-list)) 'euc-jp-unix))
+              'euc-japan-unix))
+      (and (boundp 'MULE) *euc-japan*unix)))
   "*Default coding system for migemo.el"
   :group 'migemo
   :type 'coding-system)
@@ -146,20 +135,12 @@
   :group 'migemo
   :type 'integer)
 
-(defcustom migemo-pattern-alist-file (cond
-				      (migemo-use-shy-group
-				       "~/.migemo-pattern.shy")
-				      (t
-				       "~/.migemo-pattern"))
+(defcustom migemo-pattern-alist-file "~/.migemo-pattern"
   "*Path of migemo alist file. If nil, don't save and restore the file."
   :group 'migemo
   :type 'file)
 
-(defcustom migemo-frequent-pattern-alist-file (cond
-					       (migemo-use-shy-group
-						"~/.migemo-frequent.shy")
-					       (t
-						"~/.migemo-frequent"))
+(defcustom migemo-frequent-pattern-alist-file "~/.migemo-frequent"
   "*Path of migemo frequent alist file. If nil, don't save and restore the file."
   :group 'migemo
   :type 'file)
@@ -181,12 +162,19 @@
 (defvar migemo-process nil)
 (defvar migemo-buffer nil)
 (defvar migemo-current-input-method nil)
+(defvar migemo-current-input-method-title nil)
+(defvar migemo-input-method-function nil)
 (defvar migemo-search-pattern nil)
 (defvar migemo-pattern-alist nil)
 (defvar migemo-frequent-pattern-alist nil)
 (defconst migemo-emacs21p (and (> emacs-major-version 20) (not (featurep 'xemacs))))
 (defvar migemo-search-pattern-alist nil)
 (defvar migemo-do-isearch nil)
+(defvar migemo-register-isearch-keybinding-function nil)
+
+;; For warnings of byte-compile. Following functions are defined in XEmacs
+(declare-function set-process-input-coding-system "code-process")
+(declare-function set-process-output-coding-system "code-process")
 
 (defsubst migemo-search-pattern-get (string)
   (let ((pattern (cdr (assoc string migemo-search-pattern-alist))))
@@ -205,9 +193,8 @@
 	     "nil")))
 
 (defun migemo-start-process (name buffer program args)
-  (unless migemo-pattern-parser-function
-    (setq args (delete "-p" (delete "--noparse" args))))
-  (let ((proc (apply 'start-process name buffer program args)))
+  (let* ((process-connection-type nil)
+         (proc (apply 'start-process name buffer program args)))
     (if (fboundp 'set-process-coding-system)
 	(set-process-coding-system proc
 				   migemo-coding-system
@@ -227,6 +214,9 @@
 	     (null migemo-pattern-alist))
     (setq migemo-pattern-alist
 	  (migemo-pattern-alist-load migemo-pattern-alist-file)))
+  (when (and migemo-use-default-isearch-keybinding
+             migemo-register-isearch-keybinding-function)
+    (funcall migemo-register-isearch-keybinding-function))
   (or (and migemo-process
 	   (eq (process-status migemo-process) 'run))
       (let ((options
@@ -242,7 +232,7 @@
 	(setq migemo-buffer (get-buffer-create " *migemo*"))
 	(setq migemo-process (migemo-start-process
 			      "migemo" migemo-buffer migemo-command options))
-	(process-kill-without-query migemo-process)
+	(set-process-query-on-exit-flag migemo-process nil)
 	t)))
 
 (defun migemo-replace-in-string (string from to)
@@ -255,130 +245,46 @@
     (buffer-substring (point-min) (point-max))))
 
 (defun migemo-get-pattern (word)
-  (if (fboundp migemo-pattern-parser-function)
-      (funcall migemo-pattern-parser-function word)
-    (migemo-get-pattern-1 word)))
-
-(defsubst migemo-get-pattern-generator (words)
-  (let (word segs rets seg sep)
-    (while (setq word (car words))
-      (setq words (cdr words))
-      (while (string-match migemo-pattern-separator-regex word)
-	(setq seg (substring word 0 (match-beginning 0)))
-	(setq sep (match-string 0 word))
-	(setq word (substring word (match-end 0)))
-	(if (and (= (length seg) 1)
-		 (string-match "[a-zA-Z]" seg))
-	    (setq segs (cons (concat seg sep) segs))
-	  (setq segs (cons seg segs))
-	  (setq segs (cons sep segs))))
-      (setq segs (cons word segs)))
-    (setq segs (delete "" segs))
-    (if (= (length segs) 1)
-	(migemo-get-pattern-1 (car segs))
-      (while segs
-	(setq rets (cons (migemo-get-pattern-1 (car segs)) rets))
-	(setq segs (cdr segs)))
-      (setq rets (delete "" rets))
-      (cond
-       ((null rets)
-	"")
-       ((= (length rets) 1 )
-	(car rets))
-       (migemo-use-shy-group
-	(concat "\\(?:"
-		(mapconcat 'identity rets
-			   (format "\\)%s\\(?:" migemo-white-space-regexp))
-		"\\)"))
-       (t
-	(concat "\\("
-		(mapconcat 'identity rets
-			   (format "\\)%s\\(" migemo-white-space-regexp))
-		"\\)"))))))
-
-(defun migemo-get-pattern-upcase-kugiri (word)
-  (let (case-fold-search)
-    (cond
-     ((string= "" word)
-      "")
-     ((and (not (string-match "[A-Z]" word))
-	   (not (string-match migemo-pattern-separator-regex word)))
-      (migemo-get-pattern-1 word))
-     (t
-      (let (words)
-	(while (string-match "[A-Z]+" word)
-	  (setq words (cons (substring word 0 (match-beginning 0)) words))
-	  (setq word (concat (downcase (match-string 0 word))
-			     (substring word (match-end 0)))))
-	(setq words (nreverse (delete "" (cons word words))))
-	(migemo-get-pattern-generator words))))))
-
-(defun migemo-get-pattern-space-kugiri (word)
-  (setq word (downcase word))
   (cond
-   ((string= "" word)
-    "")
-   ((and (not (string-match "[ \t]" word))
-	 (not (string-match migemo-pattern-separator-regex word)))
-    (migemo-get-pattern-1 word))
-   ((string-match "^ +$" word)
-    (migemo-get-pattern-1 word))
-   (t
-    (let (words)
-      (when (string-match "[ \t]+$" word)
-	(setq word (substring word 0 (match-beginning 0))))
-      (setq word (migemo-replace-in-string word migemo-white-space-regexp " "))
-      (setq words (split-string word " "))
-      (migemo-get-pattern-generator words)))))
-
-(defun migemo-get-pattern-1 (word)
-  (cond
-   ((or (zerop (length word))
-	(and (< (length word) migemo-isearch-min-length)
-	     (string-match "^[a-zA-Z]+$" word)))
+   ((< (length word) migemo-isearch-min-length)
     "")
    (t
     (let (deactivate-mark pattern freq alst)
       (set-text-properties 0 (length word) nil word)
       (migemo-init)
+      (when (and migemo-pre-conv-function
+		 (functionp migemo-pre-conv-function))
+	(setq word (funcall migemo-pre-conv-function word)))
       (setq pattern
 	    (cond
 	     ((setq freq (and migemo-use-frequent-pattern-alist
 			      (assoc word migemo-frequent-pattern-alist)))
 	      (cdr freq))
-	     ((setq alst (assoc word migemo-pattern-alist))
+	     ((setq alst (and migemo-use-pattern-alist
+			      (assoc word migemo-pattern-alist)))
 	      (setq migemo-pattern-alist (cons alst (delq alst migemo-pattern-alist)))
 	      (cdr alst))
 	     (t
 	      (with-current-buffer (process-buffer migemo-process)
-	       	(delete-region (point-min) (point-max))
-	       	(process-send-string migemo-process (concat word "\n"))
-	       	(while (not (and (> (point-max) 1)
-	       	 		 (eq (char-after (1- (point-max))) ?\n)))
+		(delete-region (point-min) (point-max))
+		(process-send-string migemo-process (concat word "\n"))
+		(while (not (and (> (point-max) 1)
+				 (eq (char-after (1- (point-max))) ?\n)))
 		  (accept-process-output migemo-process
 					 0 migemo-accept-process-output-timeout-msec))
-		;; (sit-for migemo-accept-process-output-timeout-msec))
-		(setq pattern (buffer-substring-no-properties (point-min) (1- (point-max)))))
-	      ;; (save-excursion
-	      ;; 	(set-buffer (process-buffer migemo-process))
-	      ;; 	(delete-region (point-min) (point-max))
-	      ;; 	(process-send-string migemo-process (concat word "\n"))
-	      ;; 	(while (not (and (> (point-max) 1)
-	      ;; 			 (eq (char-after (1- (point-max))) ?\n)))
-	      ;; 	  (accept-process-output migemo-process
-	      ;; 				 0 migemo-accept-process-output-timeout-msec))
-	      ;; (setq pattern (buffer-substring (point-min) (1- (point-max)))))
+		(setq pattern (buffer-substring (point-min) (1- (point-max)))))
 	      (when (and (memq system-type '(windows-nt OS/2 emx))
 			 (> (length pattern) 1)
 			 (eq ?\r (aref pattern (1- (length pattern)))))
 		(setq pattern (substring pattern 0 -1)))
-	      (setq migemo-pattern-alist
-		    (cons (cons word pattern) migemo-pattern-alist))
-	      (when (and migemo-pattern-alist-length
-			 (> (length migemo-pattern-alist)
-			    (* migemo-pattern-alist-length 2)))
-		(setcdr (nthcdr (1- (* migemo-pattern-alist-length 2))
-				migemo-pattern-alist) nil))
+	      (when migemo-use-pattern-alist
+		(setq migemo-pattern-alist
+		      (cons (cons word pattern) migemo-pattern-alist))
+		(when (and migemo-pattern-alist-length
+			   (> (length migemo-pattern-alist)
+			      (* migemo-pattern-alist-length 2)))
+		  (setcdr (nthcdr (1- (* migemo-pattern-alist-length 2))
+				  migemo-pattern-alist) nil)))
 	      pattern)))
       (if (and migemo-after-conv-function
 	       (functionp migemo-after-conv-function))
@@ -387,20 +293,20 @@
 
 (defun migemo-pattern-alist-load (file)
   "Load migemo alist file."
-  (let ((coding-system-for-read migemo-coding-system)
-	(file-coding-system-for-read migemo-coding-system))
-    (setq file (expand-file-name file))
-    (when (file-readable-p file)
-      (with-temp-buffer
-	(insert-file-contents file)
-	(goto-char (point-min))
-	(condition-case err
-	    (read (current-buffer))
-	  (error
-	   (message "Error while reading %s; %s"
-		    (file-name-nondirectory file)
-		    (error-message-string err))
-	   nil))))))
+  (setq file (expand-file-name file))
+  (when (file-readable-p file)
+    (with-temp-buffer
+      (let ((coding-system-for-read migemo-coding-system)
+            (buffer-file-coding-system migemo-coding-system)))
+      (insert-file-contents file)
+      (goto-char (point-min))
+      (condition-case err
+          (read (current-buffer))
+        (error
+         (message "Error while reading %s; %s"
+                  (file-name-nondirectory file)
+                  (error-message-string err))
+         nil)))))
 
 (defun migemo-pattern-alist-save (&optional clear)
   "Save migemo alist file."
@@ -408,9 +314,7 @@
   (when (and migemo-use-pattern-alist
 	     migemo-pattern-alist-file
 	     (or migemo-pattern-alist clear))
-    (let ((file (expand-file-name migemo-pattern-alist-file))
-	  (coding-system-for-write migemo-coding-system)
-	  (file-coding-system  migemo-coding-system))
+    (let ((file (expand-file-name migemo-pattern-alist-file)))
       (when (file-writable-p file)
 	(when clear
 	  (setq migemo-pattern-alist nil))
@@ -419,10 +323,12 @@
 	  (setcdr (nthcdr (1- migemo-pattern-alist-length)
 			  migemo-pattern-alist) nil))
 	(with-temp-buffer
-	  (if (fboundp 'pp)
-	      (pp migemo-pattern-alist (current-buffer))
-	    (prin1 migemo-pattern-alist (current-buffer)))
-	  (write-region (point-min) (point-max) file nil 'nomsg))
+	  (let ((coding-system-for-write migemo-coding-system)
+                (buffer-file-coding-system migemo-coding-system))
+            (if (fboundp 'pp)
+                (pp migemo-pattern-alist (current-buffer))
+              (prin1 migemo-pattern-alist (current-buffer)))
+            (write-region (point-min) (point-max) file nil 'nomsg)))
 	(setq migemo-pattern-alist nil)))))
 
 (defun migemo-kill ()
@@ -445,19 +351,18 @@
   "Create frequent pattern from `frequent-chars'."
   (interactive "ffrequent-chars: ")
   (migemo-pattern-alist-save 'clear)
-  (setq migemo-pattern-alist nil)
   (when migemo-frequent-pattern-alist-file
     (migemo-kill)
     (migemo-init)
     (let ((file (expand-file-name migemo-frequent-pattern-alist-file))
-	  (coding-system-for-write migemo-coding-system)
-	  (file-coding-system  migemo-coding-system)
 	  (migemo-use-pattern-alist nil)
 	  (migemo-use-frequent-pattern-alist nil)
-	  (migemo-after-conv-function (lambda (x y) y))
-	  word regex)
+	  (migemo-after-conv-function (lambda (_x y) y))
+	  word)
       (setq migemo-frequent-pattern-alist nil)
       (with-temp-buffer
+        (let ((coding-system-for-write migemo-coding-system)
+              (buffer-file-coding-system migemo-coding-system)))
 	(insert-file-contents fcfile)
 	(goto-char (point-min))
 	(message "Make frequently pattern...")
@@ -466,11 +371,7 @@
 	    (setq word (match-string 0))
 	    (message "Make frequently pattern...%s" word)
 	    (setq migemo-frequent-pattern-alist
-		  (cons (cons word
-			      (let ((pattern (migemo-get-pattern word)))
-				(if (not (= (length word) 1))
-				    pattern
-				  (migemo-replace-in-string pattern "\a" ""))))
+		  (cons (cons word (migemo-get-pattern word))
 			migemo-frequent-pattern-alist)))
 	  (forward-line 1))
 	(when (file-writable-p file)
@@ -480,9 +381,10 @@
 	  (if (fboundp 'pp)
 	      (pp migemo-frequent-pattern-alist (current-buffer))
 	    (prin1 migemo-frequent-pattern-alist (current-buffer)))
-	  (write-region (point-min) (point-max) file nil 'nomsg))))
-    (setq migemo-pattern-alist nil)
-    (message "Make frequently pattern...done")))
+	  (write-region (point-min) (point-max) file nil 'nomsg)))
+      (migemo-kill)
+      (migemo-init)
+      (message "Make frequently pattern...done"))))
 
 (defun migemo-expand-pattern () "\
 Expand the Romaji sequences on the left side of the cursor
@@ -621,6 +523,10 @@ into the migemo's regexp pattern."
 		       migemo-dabbrev-pattern)))
     (add-hook 'pre-command-hook 'migemo-dabbrev-expand-done)))
 
+(defsubst migemo--isearch-regexp-function ()
+  (or (bound-and-true-p isearch-regexp-function)
+      (bound-and-true-p isearch-word)))
+
 ;; Use migemo-{forward,backward} instead of search-{forward,backward}.
 (defadvice isearch-search (around migemo-search-ad activate)
   "adviced by migemo."
@@ -634,7 +540,7 @@ into the migemo's regexp pattern."
   "adviced by migemo."
   (let ((isearch-adjusted isearch-adjusted))
     (when (and migemo-isearch-enable-p
-	       (not isearch-forward) (not isearch-regexp) (not isearch-word))
+	       (not isearch-forward) (not isearch-regexp) (not (migemo--isearch-regexp-function)))
       ;; don't use 'looking-at'
       (setq isearch-adjusted t))
     ad-do-it))
@@ -653,105 +559,104 @@ into the migemo's regexp pattern."
 	    (migemo-backward (ad-get-arg 0) (ad-get-arg 1) (ad-get-arg 2) (ad-get-arg 3)))
     ad-do-it))
 
-(defadvice isearch-search-forward (around migemo-search-ad activate)
-  "adviced by migemo."
-  (if migemo-do-isearch
-      (setq ad-return-value
-	    (migemo-forward (ad-get-arg 0) (ad-get-arg 1) (ad-get-arg 2) (ad-get-arg 3)))
-    ad-do-it))
-
-(defadvice isearch-search-backward (around migemo-search-ad activate)
-  "adviced by migemo."
-  (if migemo-do-isearch
-      (setq ad-return-value
-	    (migemo-backward (ad-get-arg 0) (ad-get-arg 1) (ad-get-arg 2) (ad-get-arg 3)))
-    ad-do-it))
-
 (when (and (boundp 'isearch-regexp-lax-whitespace)
 	   (fboundp 're-search-forward-lax-whitespace)
 	   (fboundp 'search-forward-lax-whitespace))
   (setq isearch-search-fun-function 'isearch-search-fun-migemo)
 
+  (when (fboundp 'isearch-search-fun-default)
+    (defadvice multi-isearch-search-fun (after support-migemo activate)
+      (setq ad-return-value
+            `(lambda (string bound noerror)
+               (cl-letf (((symbol-function 'isearch-search-fun-default)
+                          'isearch-search-fun-migemo))
+                 (funcall ,ad-return-value string bound noerror))))))
+
   (defun isearch-search-fun-migemo ()
-    "Return default functions to use for the search with migemo."
-    (cond
-     (isearch-word
-      (lambda (string &optional bound noerror count)
+	"Return default functions to use for the search with migemo."
+	(cond
+	 ((migemo--isearch-regexp-function)
+	  (lambda (string &optional bound noerror count)
 	;; Use lax versions to not fail at the end of the word while
 	;; the user adds and removes characters in the search string
 	;; (or when using nonincremental word isearch)
-	(let ((lax (not (or isearch-nonincremental
-			    (eq (length isearch-string)
-				(length (isearch--state-string
-					 (car isearch-cmds))))))))
+	(let* ((state-string-func (if (fboundp 'isearch--state-string)
+				      'isearch--state-string
+				    'isearch-string-state))
+               (lax (not (or isearch-nonincremental
+				(eq (length isearch-string)
+				(length (funcall state-string-func (car isearch-cmds))))))))
 	  (funcall
 	   (if isearch-forward #'re-search-forward #'re-search-backward)
-	   (if (functionp isearch-word)
-	       (funcall isearch-word string lax)
-	     (word-search-regexp string lax))
+	   (if (functionp (migemo--isearch-regexp-function))
+		   (funcall (migemo--isearch-regexp-function) string lax)
+		 (word-search-regexp string lax))
 	   bound noerror count))))
-     ((and isearch-regexp isearch-regexp-lax-whitespace
+	 ((and isearch-regexp isearch-regexp-lax-whitespace
 	   search-whitespace-regexp)
-      (if isearch-forward
+	  (if isearch-forward
 	  're-search-forward-lax-whitespace
 	're-search-backward-lax-whitespace))
-     (isearch-regexp
-      (if isearch-forward 're-search-forward 're-search-backward))
-     ((and isearch-lax-whitespace search-whitespace-regexp migemo-do-isearch)
-      (if isearch-forward 'migemo-forward 'migemo-backward))
-     ((and isearch-lax-whitespace search-whitespace-regexp)
-      (if isearch-forward 'search-forward-lax-whitespace
+	 (isearch-regexp
+	  (if isearch-forward 're-search-forward 're-search-backward))
+	 ((and (if (boundp 'isearch-lax-whitespace) isearch-lax-whitespace t)
+               search-whitespace-regexp migemo-do-isearch)
+	  (if isearch-forward 'migemo-forward 'migemo-backward))
+	 ((and (if (boundp 'isearch-lax-whitespace) isearch-lax-whitespace t)
+               search-whitespace-regexp)
+	  (if isearch-forward 'search-forward-lax-whitespace
 	'search-backward-lax-whitespace))
-     (migemo-do-isearch
-      (if isearch-forward 'migemo-forward 'migemo-backward))
-     (t
-      (if isearch-forward 'search-forward 'search-backward))))
+	 (migemo-do-isearch
+	  (if isearch-forward 'migemo-forward 'migemo-backward))
+	 (t
+	  (if isearch-forward 'search-forward 'search-backward))))
   )
 
 ;; Turn off input-method automatically when C-s or C-r are typed.
-(defvar migemo-isearch-case-fold nil)
-(make-variable-buffer-local 'migemo-isearch-case-fold)
-
-;; error guard for XEmacs
-(unless (boundp 'search-upper-case)
-  (defvar search-upper-case nil))
-
 (defadvice isearch-mode (before migemo-search-ad activate)
   "adviced by migemo."
   (setq migemo-search-pattern nil)
   (setq migemo-search-pattern-alist nil)
-  (when migemo-isearch-enable-p
-    (setq migemo-isearch-case-fold `(t ,case-fold-search
-				       ,search-upper-case
-				       ,isearch-case-fold-search))
-    (set (make-local-variable 'search-upper-case) nil)
-    (setq case-fold-search t)
-    (set (make-local-variable 'isearch-case-fold-search) t))
   (when (and migemo-isearch-enable-p
 	     (boundp 'current-input-method))
     (setq migemo-current-input-method current-input-method)
+    (setq migemo-current-input-method-title current-input-method-title)
+    (setq migemo-input-method-function input-method-function)
     (when (and migemo-mw32-input-method
 	       (stringp migemo-current-input-method)
 	       (string= migemo-current-input-method migemo-mw32-input-method))
       (set-input-method nil))
-    (setq current-input-method nil)))
+    (setq current-input-method nil)
+    (setq current-input-method-title nil)
+    (setq input-method-function nil)
+    (when migemo-current-input-method
+      (unwind-protect
+          (run-hooks
+           'input-method-inactivate-hook
+           'input-method-deactivate-hook)
+        (force-mode-line-update)))))
 
 (defadvice isearch-done (after migemo-search-ad activate)
   "adviced by migemo."
   (setq migemo-search-pattern nil)
   (setq migemo-search-pattern-alist nil)
-  (when (car migemo-isearch-case-fold)
-    (setq case-fold-search (nth 1 migemo-isearch-case-fold))
-    (setq search-upper-case (nth 2 migemo-isearch-case-fold))
-    (setq isearch-case-fold-search (nth 3 migemo-isearch-case-fold)))
-  (setq migemo-isearch-case-fold nil)
   (when (and migemo-isearch-enable-p
 	     (boundp 'current-input-method))
     (when (and migemo-mw32-input-method
 	       (stringp migemo-current-input-method)
 	       (string= migemo-current-input-method migemo-mw32-input-method))
       (set-input-method migemo-current-input-method))
-    (setq current-input-method migemo-current-input-method)))
+    (let ((state-changed-p (not (equal current-input-method migemo-current-input-method))))
+      (setq current-input-method migemo-current-input-method)
+      (setq current-input-method-title migemo-current-input-method-title)
+      (setq input-method-function migemo-input-method-function)
+      (when state-changed-p
+        (unwind-protect
+            (apply #'run-hooks (if current-input-method
+                                   '(input-method-activate-hook)
+                                 '(input-method-inactivate-hook
+                                   input-method-deactivate-hook)))
+          (force-mode-line-update))))))
 
 (defcustom migemo-message-prefix-face 'highlight
   "*Face of minibuffer prefix"
@@ -765,7 +670,7 @@ into the migemo's regexp pattern."
     (when migemo-emacs21p
       (put-text-property 0 (length str) 'face migemo-message-prefix-face str))
     (when (and migemo-isearch-enable-p
-	       (not (or isearch-regexp isearch-word)))
+	       (not (or isearch-regexp (migemo--isearch-regexp-function))))
       (setq ad-return-value (concat str " " ret)))))
 
 ;;;; for isearch-lazy-highlight (Emacs 21)
@@ -774,38 +679,23 @@ into the migemo's regexp pattern."
 (defvar isearch-lazy-highlight-start)
 (defvar isearch-lazy-highlight-end)
 
-(defun migemo-isearch-lazy-highlight-search ()
-  "Search ahead for the next or previous match, for lazy highlighting.
-Attempt to do the search exactly the way the pending isearch would.
-This function used with Megemo feature."
-  (let ((case-fold-search (if (boundp 'isearch-lazy-highlight-case-fold-search)
-			      isearch-lazy-highlight-case-fold-search
-			    isearch-case-fold-search))
-        (choices (cond (isearch-word
-                        '(word-search-forward word-search-backward))
-                       (isearch-regexp
-                        '(re-search-forward re-search-backward))
-                       (migemo-isearch-enable-p
-                        '(re-search-forward re-search-backward t))
-                       (t
-                        '(search-forward search-backward))))
-	(pattern isearch-string))
-    (when (nth 2 choices)
-     (setq pattern (migemo-search-pattern-get isearch-string)))
-    (funcall (if isearch-forward
-		 (nth 0 choices) (nth 1 choices))
-	     pattern
-             (if isearch-forward
-                 (if isearch-lazy-highlight-wrapped
-                     isearch-lazy-highlight-start
-                   (window-end))
-               (if isearch-lazy-highlight-wrapped
-                   isearch-lazy-highlight-end
-                 (window-start)))
-             t)))
+(when (fboundp 'isearch-lazy-highlight-new-loop)
+  (defadvice isearch-lazy-highlight-new-loop (around migemo-isearch-lazy-highlight-new-loop
+                                                     activate)
+    "adviced by migemo"
+    (if (and migemo-isearch-enable-p
+             (not (migemo--isearch-regexp-function))
+             (not isearch-regexp))
+        (let ((isearch-string (migemo-search-pattern-get isearch-string))
+              (isearch-regexp t))
+          ad-do-it)
+      ad-do-it)))
 
-(when (fboundp 'isearch-lazy-highlight-search)
-  (defalias 'isearch-lazy-highlight-search 'migemo-isearch-lazy-highlight-search))
+(when (fboundp 'replace-highlight)
+  (defadvice replace-highlight (around migemo-replace-highlight activate)
+    "adviced by migemo"
+    (let ((migemo-isearch-enable-p nil))
+      ad-do-it)))
 
 ;;;; for isearch-highlightify-region (XEmacs 21)
 (when (fboundp 'isearch-highlightify-region)
@@ -821,31 +711,20 @@ This function used with Megemo feature."
 ;; supports C-w C-d for GNU emacs only [migemo:00171]
 (when (and (not (featurep 'xemacs))
 	   (fboundp 'isearch-yank-line))
-  (add-hook 'isearch-mode-hook
-	    (lambda ()
-	      (define-key isearch-mode-map "\C-d" 'migemo-isearch-yank-char)
-	      (define-key isearch-mode-map "\C-w" 'migemo-isearch-yank-word)
-	      (define-key isearch-mode-map "\C-y" 'migemo-isearch-yank-line)
-	      (define-key isearch-mode-map "\M-m" 'migemo-isearch-toggle-migemo)))
+  (defun migemo-register-isearch-keybinding ()
+    (define-key isearch-mode-map "\C-d" 'migemo-isearch-yank-char)
+    (define-key isearch-mode-map "\C-w" 'migemo-isearch-yank-word)
+    (define-key isearch-mode-map "\C-y" 'migemo-isearch-yank-line)
+    (define-key isearch-mode-map "\M-m" 'migemo-isearch-toggle-migemo))
+
+  (setq migemo-register-isearch-keybinding-function 'migemo-register-isearch-keybinding)
 
   (defun migemo-isearch-toggle-migemo ()
     "Toggle migemo mode in isearch."
     (interactive)
-    (unless (or isearch-regexp isearch-word)
+    (unless (or isearch-regexp (migemo--isearch-regexp-function))
       (discard-input)
       (setq migemo-isearch-enable-p (not migemo-isearch-enable-p)))
-    (if migemo-isearch-enable-p
-	(progn
-	  (setq migemo-isearch-case-fold `(t ,case-fold-search
-					     ,search-upper-case
-					     ,isearch-case-fold-search))
-	  (set (make-local-variable 'search-upper-case) nil)
-	  (setq case-fold-search t)
-	  (set (make-local-variable 'isearch-case-fold-search) t))
-      (when (car migemo-isearch-case-fold)
-	(setq case-fold-search (nth 1 migemo-isearch-case-fold))
-	(setq search-upper-case (nth 2 migemo-isearch-case-fold))
-	(setq isearch-case-fold-search (nth 3 migemo-isearch-case-fold))))
     (when (fboundp 'isearch-lazy-highlight-new-loop)
       (let ((isearch-lazy-highlight-last-string nil))
 	(condition-case nil
@@ -913,3 +792,9 @@ This function used with Megemo feature."
 ;; sample
 ;; 0123 abcd ABCD ひらがな カタカナ 漢字 !"[#\$]%^&_':`(;)<*=+>,?-@./{|}~
 
+;; Local Variables:
+;; coding: euc-japan-unix
+;; indent-tabs-mode: nil
+;; End:
+
+;;; migemo.el ends here
