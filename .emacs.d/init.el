@@ -1,10 +1,10 @@
 ;; -*- mode: emacs-lisp ; coding: utf-8-unix -*-
 ;; ~/.emacs.d/init.el
-;; Last modified: 2014/10/05 23:59:30
+;; Last modified: 2017/06/04 17:00:29
 
 ;; 想定する環境:
-;; * Windows 7/8/8.1 + gnupack emacs 24.3
-;; 動くかもしれないけど最近確認していない環境:
+;; * Windows 10 + emacs 25.2
+;; 過去に想定していた環境:
 ;; * Windows 7/8/8.1 + Cygwin emacs-w32 24.3
 ;; * Mac OS X Mountain Lion + Cocoa Emacs 24.3
 
@@ -281,37 +281,14 @@
   (setq inhibit-startup-message t)
 
   ;; フォントセット定義
-  (create-fontset-from-ascii-font "Migu 1m:size=12:weight=normal:slant=normal" nil "migu1m")
-  (setq my:font-spec (font-spec :family "Migu 1m" :size 12))
-  (set-fontset-font "fontset-migu1m" 'unicode my:font-spec)
-  (set-fontset-font "fontset-migu1m" 'japanese-jisx0208 my:font-spec)
-  (set-fontset-font "fontset-migu1m" 'katakana-jisx0201 my:font-spec)
-
-  ;; ウィンドウ装飾やタスクバーにだいたい合わせた右下マージン
-  (cond (system-type-is-windows (progn (setq my:margin-right-pixel 52)
-                                       (setq my:margin-bottom-pixel 75)))
-        (system-type-is-darwin (progn (setq my:margin-right-pixel 38)
-                                      (setq my:margin-bottom-pixel 50)))
-        (t (progn (setq my:margin-right-pixel 0)
-                  (setq my:margin-bottom-pixel 0))))
-
-  ;; デフォルトフレーム設定
-  ;; ウィンドウサイズと位置はフォントとディスプレイ解像度に合わせて右寄せで算出
-  (let ((font "fontset-migu1m"))
-    (set-default-font font) ; 計算用に一旦設定
-    (let* ((width 120)
-           (height (/ (- (x-display-pixel-height) my:margin-bottom-pixel) (frame-char-height)))
-           (left (- (- (x-display-pixel-width) my:margin-right-pixel) (* width (frame-char-width))))
-           (top 0))
-
-      (setq default-frame-alist
-            (append (list (cons 'width width)
-                          (cons 'height height)
-                          (cons 'top top)
-                          (cons 'left left)
-                          (cons 'font font)
-                          '(alpha 90))
-                    default-frame-alist)))))
+  ;; - サイズを指定しない方が DPI に適当に合わせてくれているような？
+  ;; - ウィンドウ位置も覚えているようなので default-frame 設定も消してみる
+  (create-fontset-from-ascii-font "Migu 1m:weight=normal:slant=normal" nil "migu1m")
+  (set-fontset-font "fontset-migu1m" 'ascii (font-spec :family "Migu 1m"))
+  (set-fontset-font "fontset-migu1m" 'unicode (font-spec :family "Migu 1m"))
+  (set-fontset-font "fontset-migu1m" 'japanese-jisx0208 (font-spec :family "Migu 1m"))
+  (set-fontset-font "fontset-migu1m" 'katakana-jisx0201 (font-spec :family "Migu 1m"))
+  )
 
 ;; ------------------------------------------------------------------------
 ;; マウス
