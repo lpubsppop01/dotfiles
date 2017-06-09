@@ -1,6 +1,6 @@
 ;; -*- mode: emacs-lisp ; coding: utf-8-unix -*-
 ;; ~/.emacs.d/init.el
-;; Last modified: 2017/06/04 23:11:31
+;; Last modified: 2017/06/09 23:39:12
 
 ;; 想定する環境:
 ;; * Windows 10 + emacs 25.2
@@ -11,190 +11,8 @@
 ;; ------------------------------------------------------------------------
 ;; ユーザー情報
 
-;; (setq user-full-name "")
-;; (setq user-mail-address "")
-
-;; ------------------------------------------------------------------------
-;; 動作環境の判別
-
-(setq system-type-is-darwin (eq system-type 'darwin)
-      system-type-is-gnu-linux (eq system-type 'gnu/linux)
-      system-type-is-cygwin (eq system-type 'cygwin)
-      system-type-is-windows-nt (eq system-type 'windows-nt)
-      system-type-is-unix-like (or system-type-is-darwin system-type-is-gnu-linux
-                                   system-type-is-cygwin)
-      system-type-is-windows (or system-type-is-cygwin system-type-is-windows-nt))
-
-;; ------------------------------------------------------------------------
-;; パス
-
-;; -l オプションの対応 <http://d.hatena.ne.jp/peccu/20130218/trial_init>
-;; - locate-user-emacs-file に相対パスを渡すと user-emacs-directory 基準のパスが返る
-(when load-file-name
-  (setq user-emacs-directory (file-name-directory load-file-name)))
-
-;; Cygwin
-(let* ((cygwin-root-directory-auto (concat (getenv "HOME") "/../.."))
-       (cygwin-root-directory cygwin-root-directory-auto))
-  (when (file-exists-p (concat cygwin-root-directory "/Cygwin.bat"))
-    ;; cygpath, uname
-    (when system-type-is-windows
-      (let ((cygwin-bin-directory (expand-file-name (concat cygwin-root-directory "/bin"))))
-        (setq my:cygpath-program (concat cygwin-bin-directory "/cygpath"))
-        (defun cygpath-wml (unix-path)
-          (let* ((quoted-unix-path (shell-quote-argument unix-path))
-                 (command (concat my:cygpath-program " -wml " quoted-unix-path)))
-            (substring (shell-command-to-string command) 0 -1)))
-        (defun cygpath-u (windows-path)
-          (let* ((quoted-windows-path (shell-quote-argument windows-path))
-                 (command (concat my:cygpath-program " -u " quoted-windows-path)))
-            (substring (shell-command-to-string command) 0 -1)))
-        (setq my:uname-program (concat cygwin-bin-directory "/uname"))
-        (defun uname-m ()
-          (let ((command (concat my:uname-program " -m")))
-            (substring (shell-command-to-string command) 0 -1)))))
-
-    ;; Cygwin の環境変数 PATH の内容を exec-path に設定
-    (when system-type-is-windows-nt
-      (let* ((bash-command (concat cygwin-root-directory "/bin/bash"))
-             (bash-args "--login -c 'echo $PATH'")
-             (bash-env-path (shell-command-to-string (concat bash-command " " bash-args)))
-             (unix-paths (split-string bash-env-path ":"))
-             (windows-paths (mapcar #'cygpath-wml unix-paths)))
-        (setq exec-path windows-paths)))
-
-    ;; git が動くようにいろいろ設定
-    (setenv "LANG" "ja_JP.UTF-8")
-    (setenv "SSH_ASKPASS" "/usr/local/bin/win-ssh-askpass.exe")
-    ))
-
-;; load-path に ~/.emacs.d/site-lisp を追加
-;; normal-top-level-add-subdirs-to-load-path で default-directory を参照しているため一時的に変更
-(let ((default-directory (locate-user-emacs-file "site-lisp")))
-  (setq load-path (cons default-directory load-path))
-  (normal-top-level-add-subdirs-to-load-path))
-
-;; exec-path に ~/.emacs.d/bin を追加
-(setq exec-path (cons (file-name-as-directory (locate-user-emacs-file "bin")) exec-path))
-
-;; プラットフォーム依存のファイルを格納しているディレクトリパスを設定
-(setq platform-dependent-directory "")
-(when (and system-type-is-windows (fboundp 'uname-m))
-  (let* ((cygwin-platform-is-x86_64 (string-equal "x86_64" (uname-m)))
-         (dir-name (if cygwin-platform-is-x86_64 "cygwin64" "cygwin")))
-    (setq platform-dependent-directory (file-name-as-directory (locate-user-emacs-file dir-name)))))
-(when system-type-is-gnu-linux
-  (setq platform-dependent-directory (file-name-as-directory (locate-user-emacs-file "gnu-linux"))))
-(when system-type-is-darwin
-  (setq platform-dependent-directory (file-name-as-directory (locate-user-emacs-file "darwin"))))
-
-;; "~" を HOME の値に置換
-;; * Mac OS X にて、migemo-dictionary が ~ を含むパスだと cmigemo が辞書を見つけられないことがあったため。
-(when system-type-is-unix-like
-  (let ((home-path (getenv "HOME")))
-    (setq platform-dependent-directory (replace-regexp-in-string "~" home-path platform-dependent-directory))))
-
-;; exec-path に ~/.emacs.d/<platform>/bin を追加
-(setq exec-path (cons (concat platform-dependent-directory "bin") exec-path))
-
-;; exec-path を環境変数 PATH に反映
-;; shell-command や migemo では exec-path は考慮されないため
-(setenv "PATH" (mapconcat 'identity exec-path (if system-type-is-windows-nt ";" ":")))
-
-;; Mac OS X では環境変数 DYLD_FALLBACK_LIBRARY_PATH に ~/.emacs.d/darwin/lib を追加
-(when system-type-is-darwin
-  (let ((dyld-fallback-library-path (getenv "DYLD_FALLBACK_LIBRARY_PATH"))
-        (additinal-directory (concat platform-dependent-directory "/lib")))
-    (setenv "DYLD_FALLBACK_LIBRARY_PATH"
-            (if dyld-fallback-library-path
-                (concat additinal-directory ":" dyld-fallback-library-path)
-              additinal-directory))))
-
-;; 環境変数 RUBYLIB に ~/.emacs.d/lib/ruby/site_ruby/1.9.1 を追加
-;; (let ((rubylib (getenv "RUBYLIB"))
-;;       (additinal-directory (locate-user-emacs-file "lib/ruby/site_ruby/1.9.1")))
-;;   (setenv "RUBYLIB" (if rubylib (concat additinal-directory ":" rubylib) additinal-directory)))
-
-;; 環境変数 PYTHONPATH に ~/.emacs.d/lib/python を追加
-(let ((pythonpath (getenv "PYTHONPATH"))
-      (additinal-directory (locate-user-emacs-file "lib/python")))
-  (setenv "PYTHONPATH" (if pythonpath (concat additinal-directory ":" pythonpath) additinal-directory)))
-
-;; ------------------------------------------------------------------------
-;; 言語
-
-(set-language-environment "Japanese")
-;;(setq grep-command "lgrep -n ")
-
-(when system-type-is-unix-like
-  (set-default-coding-systems 'utf-8)
-  (set-keyboard-coding-system 'utf-8)
-  (set-terminal-coding-system 'utf-8)
-  (setq file-name-coding-system 'utf-8)
-  (set-clipboard-coding-system 'utf-8)
-  (prefer-coding-system 'utf-8))
-(when system-type-is-cygwin
-  (set-clipboard-coding-system 'cp932)
-  (setq locale-coding-system 'utf-8))
-
-;; ------------------------------------------------------------------------
-;; IME
-
-(when system-type-is-windows
-  (setq default-input-method "W32-IME")
-
-  ;; IME 状態のモードライン表示
-  (setq-default w32-ime-mode-line-state-indicator "[Aa]")
-  (setq w32-ime-mode-line-state-indicator-list '("[Aa]" "[あ]" "[Aa]"))
-
-  (w32-ime-initialize)
-
-  ;; 初期カーソルカラー（IME OFF）
-  (set-cursor-color "black")
-
-  ;; IME ON/OFF 時のカーソルカラー
-  (add-hook 'input-method-activate-hook
-            (lambda() (set-cursor-color "blue")))
-  (add-hook 'input-method-inactivate-hook
-            (lambda() (set-cursor-color "black")))
-
-  ;; バッファ切り替え時に IME 状態を引き継ぐ
-  (setq w32-ime-buffer-switch-p nil)
-  )
-
-;; (when system-type-is-cygwin
-;;   (require 'w32-ime)
-;;   (setq default-input-method "W32-IME"))
-
-(when system-type-is-gnu-linux
-  ;; anthy-el
-  (load-library "anthy")
-  (setq default-input-method "japanese-anthy"))
-
-(when system-type-is-darwin
-  ;; ことえり
-  (setq default-input-method "MacOSX")
-
-  ;; shift なしの _ を \ にする KeyRemap4MacBook private.xml
-  ;; 標準添付の Underscore(Ro) to Backslash(\) では C, M 付きは変換してくれない
-  ;; ---
-  ;; <?xml version="1.0"?>
-  ;; <root>
-  ;;   <item>
-  ;;     <name>Underscore(Ro) to Backslash(\)</name>
-  ;;     <identifier>private.app_excel_command2_to_ctrlu</identifier>
-  ;;     <appendix>Underscore(Ro) to Backslash(\)</appendix>
-  ;;     <appendix>Control+Underscore(Ro) to Control+Backslash(\)</appendix>
-  ;;     <appendix>Option+Underscore(Ro) to Option+Backslash(\)</appendix>
-  ;;     <appendix>Control+Option+Underscore(Ro) to Control+Option+Backslash(\)</appendix>
-  ;;     <autogen>--KeyToKey-- KeyCode::JIS_UNDERSCORE, ModifierFlag::NONE, KeyCode::VK_JIS_BACKSLASH</autogen>
-  ;;     <autogen>--KeyToKey-- KeyCode::JIS_UNDERSCORE, VK_CONTROL, KeyCode::VK_JIS_BACKSLASH, VK_CONTROL</autogen>
-  ;;     <autogen>--KeyToKey-- KeyCode::JIS_UNDERSCORE, VK_OPTION, KeyCode::VK_JIS_BACKSLASH, VK_OPTION</autogen>
-  ;;     <autogen>--KeyToKey-- KeyCode::JIS_UNDERSCORE, VK_CONTROL | VK_OPTION, KeyCode::VK_JIS_BACKSLASH, VK_CONTROL | VK_OPTION</autogen>
-  ;;   </item>
-  ;; </root>
-  ;; ---
-  )
+(setq user-full-name "lpubsppop01")
+(setq user-mail-address "lpubsppop01@gmail.com")
 
 ;; ------------------------------------------------------------------------
 ;; 関数
@@ -259,9 +77,124 @@
 (defun can-execute-command-p (command)
   "コマンドが実行可能か判定。which の方は試してない。"
   (interactive)
-  (if system-type-is-windows
+  (if (eq system-type 'windows-nt)
       (= (shell-command (concat "where " command) nil nil) 0)
     (= (shell-command (concat "which " command) nil nil) 0))
+  )
+
+(defun path-sep-to-slash (path)
+  (replace-regexp-in-string "\\\\" "/" path))
+
+(defun path-sep-to-backslash (path)
+  (replace-regexp-in-string "/" "\\\\" path))
+
+(defun setup-busybox-w32 ()
+  "busybox-w32 をダウンロードして tar を実行可能な状態にします。"
+  (interactive)
+  (let* ((bin-dir (path-sep-to-slash (locate-user-emacs-file "busybox-w32/bin")))
+         (busybox-program (concat bin-dir "/busybox.exe"))
+         (tar-program (concat bin-dir "/tar.exe")))
+
+    ;; busybox.exe をダウンロード・配置
+    (make-directory bin-dir t)
+    (when (not (file-exists-p busybox-program))
+      (url-copy-file "http://frippery.org/files/busybox/busybox.exe" busybox-program t))
+    (when (not (file-exists-p tar-program))
+      (copy-file busybox-program tar-program t))
+
+    ;; exec-path, PATH を更新
+    (when (not (position bin-dir exec-path :test #'equal))
+      (setq exec-path (cons bin-dir exec-path))
+      (setenv "PATH" (mapconcat 'identity exec-path path-separator)))
+
+    (print "setup-busybox-w32 done")))
+
+;; ------------------------------------------------------------------------
+;; パス
+
+;; -l オプションの対応 <http://d.hatena.ne.jp/peccu/20130218/trial_init>
+;; - locate-user-emacs-file に相対パスを渡すと user-emacs-directory 基準のパスが返る。
+;; - Windows 環境では locate-user-emacs-file はバックスラッシュで区切られたパスを
+;;   返すことに注意が必要。
+(when load-file-name
+  (setq user-emacs-directory (file-name-directory load-file-name)))
+
+;; load-path に ~/.emacs.d/site-lisp を追加
+;; normal-top-level-add-subdirs-to-load-path で default-directory を参照しているため一時的に変更
+(let ((default-directory (locate-user-emacs-file "site-lisp")))
+  (setq load-path (cons default-directory load-path))
+  (normal-top-level-add-subdirs-to-load-path))
+
+;; exec-path を環境変数 PATH に反映
+;; shell-command や migemo では exec-path は考慮されないため
+(setenv "PATH" (mapconcat 'identity exec-path path-separator))
+
+;; ------------------------------------------------------------------------
+;; 言語
+
+(set-language-environment "Japanese")
+;;(setq grep-command "lgrep -n ")
+
+(set-default-coding-systems 'utf-8)
+(set-keyboard-coding-system 'utf-8)
+(set-terminal-coding-system 'utf-8)
+(setq file-name-coding-system 'utf-8)
+(set-clipboard-coding-system 'utf-8)
+(prefer-coding-system 'utf-8)
+
+;; ------------------------------------------------------------------------
+;; IME
+
+(when (eq system-type 'windows-nt)
+  (setq default-input-method "W32-IME")
+
+  ;; IME 状態のモードライン表示
+  (setq-default w32-ime-mode-line-state-indicator "[Aa]")
+  (setq w32-ime-mode-line-state-indicator-list '("[Aa]" "[あ]" "[Aa]"))
+
+  (w32-ime-initialize)
+
+  ;; 初期カーソルカラー（IME OFF）
+  (set-cursor-color "black")
+
+  ;; IME ON/OFF 時のカーソルカラー
+  (add-hook 'input-method-activate-hook
+            (lambda() (set-cursor-color "blue")))
+  (add-hook 'input-method-inactivate-hook
+            (lambda() (set-cursor-color "black")))
+
+  ;; バッファ切り替え時に IME 状態を引き継ぐ
+  (setq w32-ime-buffer-switch-p nil)
+  )
+
+(when (eq system-type 'gnu/linux)
+  ;; anthy-el
+  (load-library "anthy")
+  (setq default-input-method "japanese-anthy"))
+
+(when (eq system-type 'darwin)
+  ;; ことえり
+  (setq default-input-method "MacOSX")
+
+  ;; shift なしの _ を \ にする KeyRemap4MacBook private.xml
+  ;; 標準添付の Underscore(Ro) to Backslash(\) では C, M 付きは変換してくれない
+  ;; ---
+  ;; <?xml version="1.0"?>
+  ;; <root>
+  ;;   <item>
+  ;;     <name>Underscore(Ro) to Backslash(\)</name>
+  ;;     <identifier>private.app_excel_command2_to_ctrlu</identifier>
+  ;;     <appendix>Underscore(Ro) to Backslash(\)</appendix>
+  ;;     <appendix>Control+Underscore(Ro) to Control+Backslash(\)</appendix>
+  ;;     <appendix>Option+Underscore(Ro) to Option+Backslash(\)</appendix>
+  ;;     <appendix>Control+Option+Underscore(Ro) to Control+Option+Backslash(\)</appendix>
+  ;;     <autogen>--KeyToKey-- KeyCode::JIS_UNDERSCORE, ModifierFlag::NONE, KeyCode::VK_JIS_BACKSLASH</autogen>
+  ;;     <autogen>--KeyToKey-- KeyCode::JIS_UNDERSCORE, VK_CONTROL, KeyCode::VK_JIS_BACKSLASH, VK_CONTROL</autogen>
+  ;;     <autogen>--KeyToKey-- KeyCode::JIS_UNDERSCORE, VK_OPTION, KeyCode::VK_JIS_BACKSLASH, VK_OPTION</autogen>
+  ;;     <autogen>--KeyToKey-- KeyCode::JIS_UNDERSCORE, VK_CONTROL | VK_OPTION, KeyCode::VK_JIS_BACKSLASH, VK_CONTROL | VK_OPTION</autogen>
+  ;;   </item>
+  ;; </root>
+  ;; ---
   )
 
 ;; ------------------------------------------------------------------------
@@ -436,29 +369,13 @@
 ;; (setq time-stamp-line-limit -5)
 
 ;; ------------------------------------------------------------------------
-;; ido-mode
-
-;; (require 'ido)
-;; (ido-mode t)
-
-;; ------------------------------------------------------------------------
 ;; el-get
 
 ;; インストールに失敗したときの作業が楽なように, ひと通り標準機能の設定が終わった後に実行
 
-;; ~/.emacs.d が mklink で作成したシンボリックリンクである場合に
-;; el-get パッケージインストール後の autoload でファイルの比較に失敗する対策
-(when (and system-type-is-windows-nt (file-symlink-p (locate-user-emacs-file "")))
-  (let* ((base-dir (file-name-directory (locate-user-emacs-file "")))
-         (refered-dir-name (file-symlink-p (locate-user-emacs-file "")))
-         (true-user-emacs-dir (expand-file-name (file-name-as-directory (concat base-dir refered-dir-name))))
-         (true-el-get-dir (concat true-user-emacs-dir (file-name-as-directory "el-get"))))
-    (setq el-get-dir true-el-get-dir)
-    ))
-
-(add-to-list 'load-path (locate-user-emacs-file "el-get/el-get"))
-
-(unless (require 'el-get nil 'noerror)
+(defun setup-el-get ()
+  "el-get のインストーラをダウンロード・実行します。"
+  (interactive)
   (with-current-buffer
       (url-retrieve-synchronously
        "https://raw.github.com/dimitri/el-get/master/el-get-install.el")
@@ -466,36 +383,50 @@
       (goto-char (point-max))
       (eval-print-last-sexp))))
 
-(add-to-list 'el-get-recipe-path (locate-user-emacs-file "el-get-local-recipes"))
-(setq el-get-user-package-directory (locate-user-emacs-file "el-get-init-files"))
+(add-to-list 'load-path (locate-user-emacs-file "el-get/el-get"))
 
-(setq my:el-get-packages
-      '(auto-complete
-        ;; yasnippet
-        ;; jedi
-        ;; markdown-mode
-        ;; Powershell
-        ;; scala-mode2
-        helm
-        ;; helm-ag
-        ;; ag
-        ;; auto-complete-clang
-        ;; quickrun
-        ;; ensime
-        howm))
+(when (require 'el-get nil 'noerror)
+  ;; ~/.emacs.d が mklink で作成したシンボリックリンクである場合に
+  ;; el-get パッケージインストール後の autoload でファイルの比較に失敗する対策
+  (when (and (eq system-type 'windows-nt) (file-symlink-p (locate-user-emacs-file "")))
+    (let* ((base-dir (file-name-directory (locate-user-emacs-file "")))
+           (refered-dir-name (file-symlink-p (locate-user-emacs-file "")))
+           (true-user-emacs-dir (expand-file-name (file-name-as-directory (concat base-dir refered-dir-name))))
+           (true-el-get-dir (concat true-user-emacs-dir (file-name-as-directory "el-get"))))
+      (setq el-get-dir true-el-get-dir)
+      ))
 
-;; (el-get 'sync my:el-get-packages)
-;; (el-get 'sync '(tss json-mode)) ; TypeScript
-;; (el-get 'sync '(js2-mode js2-refactor ac-js2)) ; JavaScript
-;; (el-get 'sync '(csharp-mode))) ; C#
-(el-get 'sync)
+  (add-to-list 'el-get-recipe-path (locate-user-emacs-file "el-get-local-recipes"))
+  (setq el-get-user-package-directory (locate-user-emacs-file "el-get-init-files"))
 
-;; package からレシピ自動生成
-;; (el-get-elpa-build-local-recipes)
+  (setq my:el-get-packages
+        '(auto-complete
+          ;; yasnippet
+          ;; jedi
+          ;; markdown-mode
+          ;; Powershell
+          ;; scala-mode2
+          helm
+          ;; helm-ag
+          ;; ag
+          ;; auto-complete-clang
+          ;; quickrun
+          ;; ensime
+          howm))
 
-;; Cygwin git で "git submodule update *" 実行時に
-;; "error while loading shared libraries" となった場合は gettext があるか要確認:
-;; http://cygwin.1069669.n5.nabble.com/Re-shared-object-file-not-found-with-git-submodule-update-init-recursive-in-Cygwin-64-bit-td104123.html
+  ;; (el-get 'sync my:el-get-packages)
+  ;; (el-get 'sync '(tss json-mode)) ; TypeScript
+  ;; (el-get 'sync '(js2-mode js2-refactor ac-js2)) ; JavaScript
+  ;; (el-get 'sync '(csharp-mode))) ; C#
+  (el-get 'sync)
+
+  ;; package からレシピ自動生成
+  ;; (el-get-elpa-build-local-recipes)
+
+  ;; Cygwin git で "git submodule update *" 実行時に
+  ;; "error while loading shared libraries" となった場合は gettext があるか要確認:
+  ;; http://cygwin.1069669.n5.nabble.com/Re-shared-object-file-not-found-with-git-submodule-update-init-recursive-in-Cygwin-64-bit-td104123.html
+  )
 
 ;; ------------------------------------------------------------------------
 ;; auto-insert
@@ -814,27 +745,6 @@
 (global-set-key (quote [C-tab]) 'elscreen-next)
 (global-set-key (quote [C-S-tab]) 'elscreen-previous)
 
-;; ------------------------------------------------------------------------
-;; jaspace
-
-;; whitespace-mode に置き換えたためコメントアウト
-;; (require 'jaspace)
-
-;; jaspace-mode を常に有効化
-;; (jaspace-mode-on)
-;; 各モードで jaspace-mode を有効化
-;; (add-hook 'c-mode-common-hook '(lambda () (jaspace-mode-on)))
-;; (add-hook 'emacs-lisp-mode-hook '(lambda () (jaspace-mode-on)))
-;; (add-hook 'makefile-mode-hook '(lambda () (jaspace-mode-on)))
-;; (add-hook 'scala-mode-hook '(lambda () (jaspace-mode-on)))
-
-;; 全角空白を表す文字
-;; (setq jaspace-alternate-jaspace-string "□")
-;; 改行文字を表す文字
-;; (setq jaspace-alternate-eol-string "\xab\n")
-;; タブ文字を表示
-;; (setq jaspace-highlight-tabs t)
-
 ;; -----------------------------------------------------------------------------------
 ;; whitespace-mode
 
@@ -971,48 +881,6 @@
           (function (lambda () (if buffer-file-name (flymake-mode)))))
 
 ;; ------------------------------------------------------------------------
-;; Pymacs
-
-(autoload 'pymacs-apply "pymacs")
-(autoload 'pymacs-call "pymacs")
-(autoload 'pymacs-eval "pymacs" nil t)
-(autoload 'pymacs-exec "pymacs" nil t)
-(autoload 'pymacs-load "pymacs" nil t)
-;; (eval-after-load "pymacs"
-;;   '(add-to-list 'pymacs-load-path (locate-user-emacs-file "my-pymacs")))
-
-;; Cygwin 版 Python の python は Cygwin スタイルのシンボリックリンクのため
-;; NTEmacs からは実行できない。
-;; 参照先の python2.6.exe を使用するようにする。
-;; (when system-type-is-windows
-;;   ;; (setq pymacs-python-command "python2.6") ; 環境変数 PYMACS_PYTHON がないとき使用
-;;   (setenv "PYMACS_PYTHON" "python2.6"))
-
-;; ------------------------------------------------------------------------
-;; ropemacs
-
-;; auto-complete による補完
-;; (ac-ropemacs-initialize)
-;; (add-hook 'python-mode-hook
-;;           '(lambda ()
-;;              (add-to-list 'ac-sources 'ac-source-ropemacs)))
-
-;; ac-ropemacs-initialize を呼び出す場合はこちらは不要
-;; 補完は ac-python, jedi で行う場合はこちらで
-(add-hook 'python-mode-hook
-          '(lambda () (ac-ropemacs-require)))
-
-;; python-mode 開始時点でプロジェクトファイルが存在すれば開く
-(add-hook 'python-mode-hook
-          '(lambda ()
-             ;; ロードのタイミングがいまいちわからないため単に存在チェック
-             (when (fboundp 'rope-open-project)
-               (cond ((file-exists-p ".ropeproject")
-                      (rope-open-project "."))
-                      ((file-exists-p "../.ropeproject")
-                       (rope-open-project ".."))))))
-
-;; ------------------------------------------------------------------------
 ;; nXML-mode
 
 (add-hook 'nxml-mode-hook
@@ -1041,26 +909,6 @@
 
 (setq auto-mode-alist
       (append '(("\\.\\(cmd\\|bat\\)$" . cmd-mode)) auto-mode-alist))
-
-;; ------------------------------------------------------------------------
-;; evernote-mode
-
-;; 参考:
-;; <http://d.hatena.ne.jp/a_bicky/20120226/1330265529>
-
-;; (require 'evernote-mode)
-
-;; (setq enh-enclient-command (locate-user-emacs-file "bin/enclient.rb"))
-;; (setq evernote-enml-formatter-command '("w3m" "-dump" "-I" "UTF8" "-O" "UTF8"))
-;; (setq evernote-username "lpubsppop01")
-
-;; (global-set-key "\C-cec" 'evernote-create-note)
-;; (global-set-key "\C-ceo" 'evernote-open-note)
-;; (global-set-key "\C-ces" 'evernote-search-notes)
-;; (global-set-key "\C-ceS" 'evernote-do-saved-search)
-;; (global-set-key "\C-cew" 'evernote-write-note)
-;; (global-set-key "\C-cep" 'evernote-post-region)
-;; (global-set-key "\C-ceb" 'evernote-browser)
 
 ;; ------------------------------------------------------------------------
 ;; emacsclient

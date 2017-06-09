@@ -1,3 +1,0 @@
-[submodule ".emacs.d/src/cmigemo"]
-	path = .emacs.d/src/cmigemo
-	url = git://github.com/koron/cmigemo.git
