@@ -1,6 +1,6 @@
 ;; -*- mode: emacs-lisp ; coding: utf-8-unix -*-
 ;; ~/.emacs.d/init.el
-;; Last modified: 2017/06/10 01:07:03
+;; Last modified: 2017/06/10 01:15:52
 
 ;; 想定する環境:
 ;; * Windows 10 + emacs 25.2
@@ -800,10 +800,10 @@
   (setq migemo-options '("-q" "--emacs"))
   (setq migemo-dictionary
         (if (eq system-type 'windows-nt)
-            (concat (file-truename (executable-find "cmigemo"))
-                    "/dict/utf-8/migemo-dict")
+            (concat (file-name-directory (executable-find "cmigemo"))
+                    "dict/utf-8/migemo-dict")
           (concat (file-truename (concat (executable-find "cmigemo") "/.."))
-                  "share/migemo/utf-8/migemo-dict")))
+                  "/share/migemo/utf-8/migemo-dict")))
   (setq migemo-user-dictionary nil)
   (setq migemo-regex-dictionary nil)
   (setq migemo-coding-system 'utf-8-unix)
