@@ -3,5 +3,5 @@
        :description "Write fragmentarily and read collectively. [local]"
        :type http-tar
        :options ("xzf")
-       :url "http://howm.sourceforge.jp/a/howm-1.4.3.tar.gz"
+       :url "http://howm.sourceforge.jp/a/howm-1.4.4.tar.gz"
        :depends (flim apel))

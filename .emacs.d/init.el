@@ -1,6 +1,6 @@
 ;; -*- mode: emacs-lisp ; coding: utf-8-unix -*-
 ;; ~/.emacs.d/init.el
-;; Last modified: 2017/06/09 23:39:12
+;; Last modified: 2017/06/10 01:07:03
 
 ;; 想定する環境:
 ;; * Windows 10 + emacs 25.2
@@ -74,14 +74,6 @@
                  (locate-user-emacs-file "site-lisp/elscreen/elscreen-server.el") t)
   )
 
-(defun can-execute-command-p (command)
-  "コマンドが実行可能か判定。which の方は試してない。"
-  (interactive)
-  (if (eq system-type 'windows-nt)
-      (= (shell-command (concat "where " command) nil nil) 0)
-    (= (shell-command (concat "which " command) nil nil) 0))
-  )
-
 (defun path-sep-to-slash (path)
   (replace-regexp-in-string "\\\\" "/" path))
 
@@ -89,18 +81,21 @@
   (replace-regexp-in-string "/" "\\\\" path))
 
 (defun setup-busybox-w32 ()
-  "busybox-w32 をダウンロードして tar を実行可能な状態にします。"
+  "busybox-w32 をダウンロードして tar, unzip を実行可能な状態にします。"
   (interactive)
-  (let* ((bin-dir (path-sep-to-slash (locate-user-emacs-file "busybox-w32/bin")))
-         (busybox-program (concat bin-dir "/busybox.exe"))
-         (tar-program (concat bin-dir "/tar.exe")))
+  (let* ((bin-dir (path-sep-to-slash (locate-user-emacs-file "executables/busybox-w32")))
+         (busybox-exe-file (concat bin-dir "/busybox.exe"))
+         (tar-exe-file (concat bin-dir "/tar.exe"))
+         (unzip-exe-file (concat bin-dir "/unzip.exe")))
 
     ;; busybox.exe をダウンロード・配置
     (make-directory bin-dir t)
-    (when (not (file-exists-p busybox-program))
-      (url-copy-file "http://frippery.org/files/busybox/busybox.exe" busybox-program t))
-    (when (not (file-exists-p tar-program))
-      (copy-file busybox-program tar-program t))
+    (when (not (file-exists-p busybox-exe-file))
+      (url-copy-file "http://frippery.org/files/busybox/busybox.exe" busybox-exe-file t))
+    (when (not (file-exists-p tar-exe-file))
+      (copy-file busybox-exe-file tar-exe-file t))
+    (when (not (file-exists-p unzip-exe-file))
+      (copy-file busybox-exe-file unzip-exe-file t))
 
     ;; exec-path, PATH を更新
     (when (not (position bin-dir exec-path :test #'equal))
@@ -108,6 +103,29 @@
       (setenv "PATH" (mapconcat 'identity exec-path path-separator)))
 
     (print "setup-busybox-w32 done")))
+
+(defun setup-cmigemo-w64 ()
+  "C/Migemo for Windows 64bit をダウンロードして cmigemo を実行可能な状態にします。"
+  (interactive)
+  (setup-busybox-w32)
+  (let* ((bin-dir (file-truename (locate-user-emacs-file "executables/cmigemo-default-win64")))
+         (exe-file (concat bin-dir "/cmigemo.exe"))
+         (work-dir (file-truename (locate-user-emacs-file "executables")))
+         (zip-file (concat work-dir "/temp.zip")))
+
+    ;; busybox.exe をダウンロード・配置
+    (make-directory bin-dir t)
+    (when (not (file-exists-p exe-file))
+      (url-copy-file "http://files.kaoriya.net/goto/cmigemo_w64" zip-file t)
+      (shell-command (concat (executable-find "unzip") " " zip-file " -d " work-dir))
+      (delete-file zip-file))
+
+    ;; exec-path, PATH を更新
+    (when (not (position bin-dir exec-path :test #'equal))
+      (setq exec-path (cons bin-dir exec-path))
+      (setenv "PATH" (mapconcat 'identity exec-path path-separator)))
+
+    (print "setup-cmigemo-w64 done")))
 
 ;; ------------------------------------------------------------------------
 ;; パス
@@ -386,6 +404,10 @@
 (add-to-list 'load-path (locate-user-emacs-file "el-get/el-get"))
 
 (when (require 'el-get nil 'noerror)
+  ;; Windows では busybox-w32 を tar として使用
+  (when (eq system-type 'windows-nt)
+    (setup-busybox-w32))
+
   ;; ~/.emacs.d が mklink で作成したシンボリックリンクである場合に
   ;; el-get パッケージインストール後の autoload でファイルの比較に失敗する対策
   (when (and (eq system-type 'windows-nt) (file-symlink-p (locate-user-emacs-file "")))
@@ -401,24 +423,10 @@
 
   (setq my:el-get-packages
         '(auto-complete
-          ;; yasnippet
-          ;; jedi
-          ;; markdown-mode
-          ;; Powershell
-          ;; scala-mode2
+          markdown-mode
           helm
-          ;; helm-ag
-          ;; ag
-          ;; auto-complete-clang
-          ;; quickrun
-          ;; ensime
           howm))
-
-  ;; (el-get 'sync my:el-get-packages)
-  ;; (el-get 'sync '(tss json-mode)) ; TypeScript
-  ;; (el-get 'sync '(js2-mode js2-refactor ac-js2)) ; JavaScript
-  ;; (el-get 'sync '(csharp-mode))) ; C#
-  (el-get 'sync)
+  (el-get 'sync my:el-get-packages)
 
   ;; package からレシピ自動生成
   ;; (el-get-elpa-build-local-recipes)
@@ -782,12 +790,20 @@
 ;; ------------------------------------------------------------------------
 ;; migemo
 
-(when (can-execute-command-p "cmigemo")
+(when (eq system-type 'windows-nt)
+  (setup-cmigemo-w64))
+
+(when (executable-find "cmigemo")
   (require 'migemo)
 
   (setq migemo-command "cmigemo")
   (setq migemo-options '("-q" "--emacs"))
-  (setq migemo-dictionary (concat platform-dependent-directory "share/migemo/utf-8/migemo-dict"))
+  (setq migemo-dictionary
+        (if (eq system-type 'windows-nt)
+            (concat (file-truename (executable-find "cmigemo"))
+                    "/dict/utf-8/migemo-dict")
+          (concat (file-truename (concat (executable-find "cmigemo") "/.."))
+                  "share/migemo/utf-8/migemo-dict")))
   (setq migemo-user-dictionary nil)
   (setq migemo-regex-dictionary nil)
   (setq migemo-coding-system 'utf-8-unix)

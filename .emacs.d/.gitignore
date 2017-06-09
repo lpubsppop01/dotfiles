@@ -9,4 +9,5 @@
 /eshell
 /server
 /url
-custom.el
+/custom.el
+/executables
