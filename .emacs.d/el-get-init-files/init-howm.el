@@ -1,13 +1,13 @@
 ;; -*- mode: emacs-lisp ; coding: utf-8-unix -*-
 ;; ~/.emacs.d/el-get-init-files/init-howm.el
-;; Last modified: 2013/03/31 18:49:41
+;; Last modified: 2017/06/10 09:56:16
 
 ;; ------------------------------------------------------------------------
 ;; howm
 
 (when (require 'howm nil 'noerror)
   ;; メモファイル置場
-  (setq my:memo-directory "~/crypted/memo")
+  (setq my:memo-directory "~/howm_memos")
 
   ;; メニューのファイル名を指定
   (setq howm-menu-top nil)

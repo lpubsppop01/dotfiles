@@ -1,6 +1,6 @@
 ;; -*- mode: emacs-lisp ; coding: utf-8-unix -*-
 ;; ~/.emacs.d/init.el
-;; Last modified: 2017/06/10 01:15:52
+;; Last modified: 2017/06/10 12:06:26
 
 ;; 想定する環境:
 ;; * Windows 10 + emacs 25.2
@@ -421,12 +421,13 @@
   (add-to-list 'el-get-recipe-path (locate-user-emacs-file "el-get-local-recipes"))
   (setq el-get-user-package-directory (locate-user-emacs-file "el-get-init-files"))
 
-  (setq my:el-get-packages
-        '(auto-complete
-          markdown-mode
-          helm
-          howm))
-  (el-get 'sync my:el-get-packages)
+  (el-get-bundle tarao/el-get-lock)
+  (el-get-lock)
+  (el-get-bundle auto-complete)
+  (el-get-bundle helm)
+  (el-get-bundle markdown-mode)
+  (el-get-bundle howm)
+  (el-get-bundle magit)
 
   ;; package からレシピ自動生成
   ;; (el-get-elpa-build-local-recipes)
