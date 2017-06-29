@@ -1,6 +1,6 @@
 ;; -*- mode: emacs-lisp ; coding: utf-8-unix -*-
 ;; ~/.emacs.d/init.el
-;; Last modified: 2017/06/10 12:06:26
+;; Last modified: 2017/06/29 22:36:30
 
 ;; 想定する環境:
 ;; * Windows 10 + emacs 25.2
@@ -157,7 +157,9 @@
 (set-keyboard-coding-system 'utf-8)
 (set-terminal-coding-system 'utf-8)
 (setq file-name-coding-system 'utf-8)
-(set-clipboard-coding-system 'utf-8)
+(if (eq system-type 'windows-nt)
+    (set-clipboard-coding-system 'sjis)
+  (set-clipboard-coding-system 'utf-8))
 (prefer-coding-system 'utf-8)
 
 ;; ------------------------------------------------------------------------
