@@ -1,6 +1,6 @@
 ;; -*- mode: emacs-lisp ; coding: utf-8-unix -*-
 ;; ~/.emacs.d/el-get-init-files/init-howm.el
-;; Last modified: 2017/06/10 09:56:16
+;; Last modified: 2017/10/01 16:20:02
 
 ;; ------------------------------------------------------------------------
 ;; howm
@@ -58,6 +58,25 @@
   (setq
    howm-excluded-file-regexp
    "/\\.#\\|[~#]$\\|\\.bak$\\|/CVS/\\|\\.doc$\\|\\.pdf$\\|\\.ppt$\\|\\.xls$")
+
+  ;; 検索に ripgrep を使用
+  ;; http://extra-vision.blogspot.jp/2016/12/howm-ripgrep.html
+  (when (can-execute-shell-command-p "rg")
+    (setq howm-view-use-grep t)
+    (setq howm-view-grep-command "rg")
+    (setq howm-view-grep-option "-nH --no-heading --color never")
+    (setq howm-view-grep-extended-option nil)
+    (setq howm-view-grep-fixed-option "-F")
+    (setq howm-view-grep-expr-option nil)
+    (setq howm-view-grep-file-stdin-option nil)
+
+    ;; howm-menu で -j1 オプションを使う
+    (defun howm-menu-with-j1 (orig-fun &rest args)
+      (setq howm-view-grep-option "-nH --no-heading -j1 --color never")
+      (apply orig-fun args)
+      (setq howm-view-grep-option "-nH --no-heading --color never"))
+
+    (advice-add 'howm-menu-refresh :around #'howm-menu-with-j1))
 
   ;; いちいち消すのも面倒なので内容が 0 ならファイルごと削除する
   (if (not (memq 'delete-file-if-no-contents after-save-hook))

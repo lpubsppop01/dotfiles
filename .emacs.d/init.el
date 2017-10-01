@@ -1,6 +1,6 @@
 ;; -*- mode: emacs-lisp ; coding: utf-8-unix -*-
 ;; ~/.emacs.d/init.el
-;; Last modified: 2017/06/29 22:36:30
+;; Last modified: 2017/10/01 16:17:56
 
 ;; 想定する環境:
 ;; * Windows 10 + emacs 25.2
@@ -51,6 +51,11 @@
   (interactive)
   (let ((grep-find-command "ag --nocolor --nogroup "))
     (call-interactively 'grep-find)))
+
+(defun can-execute-shell-command-p (command)
+    (let ((which-command (if (eq system-type 'windows-nt) "where" "which")))
+      (eq (shell-command (concat which-command " " command)) 0))
+    )
 
 ;; 大文字小文字を区別しない行ソート
 ;; <http://stackoverflow.com/questions/20967818/emacs-function-to-case-insensitive-sort-lines>
