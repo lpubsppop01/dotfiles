@@ -1,6 +1,6 @@
 ;; -*- mode: emacs-lisp ; coding: utf-8-unix -*-
 ;; ~/.emacs.d/el-get-init-files/init-howm.el
-;; Last modified: 2017/10/01 16:20:02
+;; Last modified: 2017/10/02 22:35:30
 
 ;; ------------------------------------------------------------------------
 ;; howm
@@ -60,7 +60,8 @@
    "/\\.#\\|[~#]$\\|\\.bak$\\|/CVS/\\|\\.doc$\\|\\.pdf$\\|\\.ppt$\\|\\.xls$")
 
   ;; 検索に ripgrep を使用
-  ;; http://extra-vision.blogspot.jp/2016/12/howm-ripgrep.html
+  ;; - http://extra-vision.blogspot.jp/2016/12/howm-ripgrep.html
+  ;; - http://extra-vision.blogspot.jp/2016/02/emacs-howm-ag-silver-searcher.html
   (when (can-execute-shell-command-p "rg")
     (setq howm-view-use-grep t)
     (setq howm-view-grep-command "rg")
@@ -76,7 +77,12 @@
       (apply orig-fun args)
       (setq howm-view-grep-option "-nH --no-heading --color never"))
 
-    (advice-add 'howm-menu-refresh :around #'howm-menu-with-j1))
+    (advice-add 'howm-menu-refresh :around #'howm-menu-with-j1)
+
+    ;; Windows 向け文字コード設定
+    (when (eq system-type 'windows-nt)
+      (setq howm-process-coding-system '(utf-8-dos . cp932-unix)))
+    )
 
   ;; いちいち消すのも面倒なので内容が 0 ならファイルごと削除する
   (if (not (memq 'delete-file-if-no-contents after-save-hook))
